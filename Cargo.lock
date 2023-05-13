@@ -282,16 +282,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "telegram_bot"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "tracing",
- "tracing-subscriber",
- "tracing-tree",
-]
-
-[[package]]
 name = "thread_local"
 version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -384,6 +374,16 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "ts_to_tg"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-tree",
 ]
 
 [[package]]

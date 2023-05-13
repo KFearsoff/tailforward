@@ -8,17 +8,17 @@
 # upstream dream2nix flake:
 #   nix run github:nix-community/dream2nix#detect-projects $source
 
-[telegram_bot]
-name = "telegram_bot"
+[ts_to_tg]
+name = "ts_to_tg"
 relPath = ""
 subsystem = "rust"
 translator = "cargo-lock"
 translators = [ "cargo-lock", "cargo-toml",]
 
-[telegram_bot.subsystemInfo]
+[ts_to_tg.subsystemInfo]
 workspaceMembers = []
-[[telegram_bot.subsystemInfo.crates]]
-name = "telegram_bot"
+[[ts_to_tg.subsystemInfo.crates]]
+name = "ts_to_tg"
 relPath = ""
 version = "0.1.0"
 
