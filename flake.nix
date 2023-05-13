@@ -16,7 +16,13 @@
   } @ inputs: let
     forEachSystem = nixpkgs.lib.genAttrs (import systems);
   in
-    {
+    (dream2nix.lib.makeFlakeOutputs {
+      systems = ["x86_64-linux"];
+      config.projectRoot = ./.;
+      source = ./.;
+      projects = ./projects.toml;
+    })
+    // {
       devShells =
         forEachSystem
         (system: let
@@ -36,19 +42,16 @@
 
                   # Rust
                   cargo-check.enable = true;
-                  clippy.enable = true;
-                  clippy.raw.args = ["-W" "clippy::pedantic" "-W" "clippy::nursery" "-W" "clippy::unwrap_used" "-W" "clippy::expect_used"];
+                  clippy = {
+                    enable = true;
+                    raw.verbose = true;
+                    raw.args = ["-D" "clippy::pedantic" "-D" "clippy::nursery" "-D" "clippy::unwrap_used" "-D" "clippy::expect_used"];
+                  };
                   rustfmt.enable = true;
                 };
               }
             ];
           };
         });
-    }
-    // (dream2nix.lib.makeFlakeOutputs {
-      systems = ["x86_64-linux"];
-      config.projectRoot = ./.;
-      source = ./.;
-      projects = ./projects.toml;
-    });
+    };
 }
