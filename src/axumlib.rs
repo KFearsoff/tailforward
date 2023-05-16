@@ -1,8 +1,10 @@
+#![allow(clippy::unused_async, clippy::expect_used)]
+
 use axum::http::StatusCode;
 use tokio::signal;
 use tracing::{info, warn};
 
-#[warn(clippy::unused_async, clippy::expect_used)]
+#[tracing::instrument]
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -31,7 +33,7 @@ pub async fn shutdown_signal() {
     info!("Starting graceful shutdown");
 }
 
-#[warn(clippy::unused_async)]
+#[tracing::instrument]
 pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
     let status = StatusCode::NOT_FOUND;
     warn!(

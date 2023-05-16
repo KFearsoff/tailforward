@@ -2,7 +2,7 @@ use crate::errors::TailscaleWebhookError;
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use tracing::{error, info, warn};
 
-struct Event {
+pub struct Event {
     timestamp: String,
     version: i8,
     r#type: String,
@@ -13,10 +13,13 @@ struct Event {
 
 impl Event {
     #[warn(clippy::unused_async)]
-    pub async fn verify_webhook_sig() {
+    pub async fn verify_webhook_sig() -> Result<String, TailscaleWebhookError> {
+        let (first, second) = Self::parse_sig_header("test")?;
         unimplemented!();
+        Ok(first)
     }
 
+    #[tracing::instrument]
     pub fn parse_sig_header(header: &str) -> Result<(String, String), TailscaleWebhookError> {
         if header.is_empty() {
             return Err(TailscaleWebhookError::EmptyHeader);

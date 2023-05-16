@@ -1,6 +1,12 @@
-use serde_json::{json, Value};
+#![allow(clippy::unwrap_used)]
 
-#[warn(clippy::unused_async)]
-pub async fn webhook_handler() {
-    unimplemented!();
+use axum::response::IntoResponse;
+use serde_json::{json, Value};
+use tracing::info;
+
+use crate::tailscale::Event;
+
+#[tracing::instrument]
+pub async fn webhook_handler() -> impl IntoResponse {
+    Event::verify_webhook_sig().await.unwrap()
 }
