@@ -6,7 +6,8 @@ use tracing::{
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let env_filter = EnvFilter::try_from_default_env()
         .map_or_else(|_| EnvFilter::new("info"), |env_filter| env_filter);
     let subscriber = Registry::default().with(env_filter).with(
@@ -16,9 +17,10 @@ fn main() -> Result<()> {
     );
 
     dispatcher::set_global_default(Dispatch::new(subscriber))?;
-
     info!("Initialized tracing and logging systems");
 
-    println!("Hello, world!");
+    color_eyre::install()?;
+    info!("Initialized panic and error report handlers");
+
     Ok(())
 }
