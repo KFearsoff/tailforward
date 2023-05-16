@@ -1,12 +1,11 @@
 #![allow(clippy::unwrap_used)]
 
+use axum::extract::Json;
 use axum::response::IntoResponse;
-use serde_json::{json, Value};
-use tracing::info;
 
 use crate::tailscale::Event;
 
 #[tracing::instrument]
-pub async fn webhook_handler() -> impl IntoResponse {
-    Event::verify_webhook_sig().await.unwrap()
+pub async fn webhook_handler(Json(payload): Json<Event>) -> impl IntoResponse {
+    format!("{:?}", Event::verify_webhook_sig(payload).await.unwrap())
 }

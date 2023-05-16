@@ -1,7 +1,11 @@
 use crate::errors::TailscaleWebhookError;
-use chrono::{DateTime, LocalResult, TimeZone, Utc};
-use tracing::{error, info, warn};
+use chrono::{DateTime, Utc};
+use hmac::{Hmac, Mac};
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use tracing::warn;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Event {
     timestamp: String,
     version: i8,
@@ -12,15 +16,24 @@ pub struct Event {
 }
 
 impl Event {
-    #[warn(clippy::unused_async)]
-    pub async fn verify_webhook_sig() -> Result<String, TailscaleWebhookError> {
-        let (first, second) = Self::parse_sig_header("test")?;
-        unimplemented!();
-        Ok(first)
+    #[warn(clippy::unused_async, clippy::expect_used)]
+    #[tracing::instrument]
+    pub async fn verify_webhook_sig(self) -> Result<Self, TailscaleWebhookError> {
+        let (t_value, v1_value) = Self::parse_sig_header("test")?;
+        let (stamp, hash) = Self::validate_values(t_value, &v1_value)?;
+        let unix_timestamp = stamp.timestamp().to_string();
+        let body = "body".to_string();
+        let signature = Self::compute_signature(format!("{unix_timestamp}.{body}"))?;
+        let mut mac = Hmac::<Sha256>::new_from_slice(b"secret key").expect("any size");
+        mac.update(hash);
+        match mac.verify_slice(signature) {
+            Ok(_) => serde_json::from_str("data").map_err(TailscaleWebhookError::from),
+            Err(_) => Err(TailscaleWebhookError::NotSigned),
+        }
     }
 
     #[tracing::instrument]
-    pub fn parse_sig_header(header: &str) -> Result<(String, String), TailscaleWebhookError> {
+    fn parse_sig_header(header: &str) -> Result<(String, String), TailscaleWebhookError> {
         if header.is_empty() {
             return Err(TailscaleWebhookError::EmptyHeader);
         };
@@ -72,6 +85,31 @@ impl Event {
         // }?;
 
         Ok((t_value.to_string(), v1_value.to_string()))
+    }
+
+    #[tracing::instrument]
+    fn validate_values(
+        t: String,
+        v1: &str,
+    ) -> Result<(DateTime<Utc>, &[u8]), TailscaleWebhookError> {
+        let timestamp = Self::validate_t(t)?;
+        let hash = Self::validate_v1(v1)?;
+        Ok((timestamp, hash))
+    }
+
+    #[tracing::instrument]
+    fn validate_t(t: String) -> Result<DateTime<Utc>, TailscaleWebhookError> {
+        unimplemented!()
+    }
+
+    #[tracing::instrument]
+    fn validate_v1(v1: &str) -> Result<&[u8], TailscaleWebhookError> {
+        Ok(v1.as_bytes())
+    }
+
+    #[tracing::instrument]
+    fn compute_signature(base: String) -> Result<&'static [u8], TailscaleWebhookError> {
+        unimplemented!()
     }
 }
 

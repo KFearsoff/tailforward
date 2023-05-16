@@ -1,3 +1,4 @@
+use serde_json::error::Error as SerdeJsonError;
 use std::num::ParseIntError;
 use thiserror::Error;
 
@@ -11,12 +12,22 @@ pub enum TailscaleWebhookError {
     EmptyHeader,
     #[error("incorrect unix timestamp ({found:?})")]
     IncorrectTimestamp { found: String },
+    #[error("error while serializing/deserializing: {error}")]
+    Serde { error: String },
 }
 
 impl From<ParseIntError> for TailscaleWebhookError {
     fn from(error: ParseIntError) -> Self {
         Self::IncorrectTimestamp {
             found: error.to_string(),
+        }
+    }
+}
+
+impl From<SerdeJsonError> for TailscaleWebhookError {
+    fn from(error: SerdeJsonError) -> Self {
+        Self::Serde {
+            error: error.to_string(),
         }
     }
 }
