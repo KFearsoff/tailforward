@@ -25,13 +25,25 @@ pub struct Event {
 }
 
 impl Event {
+    pub async fn get(header: &str, body: Bytes) -> Result<Vec<Self>, TailscaleWebhookError> {
+        let secret: SecretString = fs::read_to_string("/secrets/tailscale-webhook")
+            .await
+            .map_err(TailscaleWebhookError::from)?
+            .into();
+        let verified = Self::verify_webhook_sig(secret, header, &body);
+        match verified {
+            Ok(_) => serde_json::from_slice(&body).map_err(TailscaleWebhookError::from),
+            Err(_) => Err(TailscaleWebhookError::NotSigned),
+        }
+    }
+
     #[warn(clippy::expect_used)]
     #[tracing::instrument]
-    pub async fn verify_webhook_sig(
-        self,
+    pub fn verify_webhook_sig(
+        secret: SecretString,
         header: &str,
-        body: Bytes,
-    ) -> Result<Self, TailscaleWebhookError> {
+        body: &Bytes,
+    ) -> Result<(), TailscaleWebhookError> {
         let (t_value, v1_value) = Self::parse_sig_header(header)?;
         let (stamp, hash) = Self::validate_values(t_value, &v1_value)?;
         let unix_timestamp = stamp.timestamp();
@@ -42,20 +54,14 @@ impl Event {
         let mut buf = BytesMut::new();
         buf.put_slice(&timestamp_bytes);
         buf.put_slice(b".");
-        buf.put_slice(&body);
+        buf.put_slice(body);
 
-        let secret: SecretString = fs::read_to_string("/secrets/tailscale-webhook")
-            .await
-            .map_err(TailscaleWebhookError::from)?
-            .into();
         let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())
             .expect("HMAC can take key of any size");
         mac.update(&buf);
 
-        match mac.verify_slice(hash) {
-            Ok(_) => serde_json::from_slice(&body).map_err(TailscaleWebhookError::from),
-            Err(_) => Err(TailscaleWebhookError::NotSigned),
-        }
+        mac.verify_slice(hash)
+            .map_err(|_| TailscaleWebhookError::NotSigned)
     }
 
     #[tracing::instrument]

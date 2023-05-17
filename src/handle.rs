@@ -30,24 +30,14 @@ pub async fn webhook_handler(headers: HeaderMap, body: Bytes) -> impl IntoRespon
         }
     };
 
-    let payload = match serde_json::from_slice(&body) {
-        Ok(val) => val,
-        Err(err) => {
-            return {
-                error!(err = format!("{err}"), "Can't unmarshal JSON!");
-                StatusCode::UNPROCESSABLE_ENTITY
-            }
-        }
-    };
-
-    match Event::verify_webhook_sig(payload, header, body).await {
+    match Event::get(header, body).await {
         Ok(val) => {
-            info!("{val}");
+            info!("{val:?}");
             StatusCode::OK
         }
         Err(err) => {
             error!("{err}");
-            StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::UNPROCESSABLE_ENTITY
         }
     }
 }
