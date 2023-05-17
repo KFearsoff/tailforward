@@ -1,11 +1,13 @@
-use crate::{errors::TailscaleWebhookError, SECRET};
+use crate::errors::TailscaleWebhookError;
 use axum::body::Bytes;
 use bytes::{BufMut, BytesMut};
 use chrono::{DateTime, Utc};
 use chrono::{LocalResult, TimeZone};
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use tokio::fs;
 use tracing::{info, warn};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,7 +40,11 @@ impl Event {
         buf.put_slice(b".");
         buf.put_slice(&body);
 
-        let mut mac = Hmac::<Sha256>::new_from_slice(SECRET.as_bytes())
+        let secret: SecretString = fs::read_to_string("/secrets/tailscale-webhook")
+            .await
+            .map_err(TailscaleWebhookError::from)?
+            .into();
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())
             .expect("HMAC can take key of any size");
         mac.update(&buf);
 
