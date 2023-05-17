@@ -1,5 +1,5 @@
 pub mod axumlib;
-mod errors;
+pub mod errors;
 pub mod handle;
 mod tailscale;
 

@@ -1,9 +1,12 @@
-use crate::errors::TailscaleWebhookError;
+use crate::{errors::TailscaleWebhookError, SECRET};
+use axum::body::Bytes;
+use bytes::{BufMut, BytesMut};
 use chrono::{DateTime, Utc};
+use chrono::{LocalResult, TimeZone};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use tracing::warn;
+use tracing::{info, warn};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Event {
@@ -18,16 +21,29 @@ pub struct Event {
 impl Event {
     #[warn(clippy::unused_async, clippy::expect_used)]
     #[tracing::instrument]
-    pub async fn verify_webhook_sig(self) -> Result<Self, TailscaleWebhookError> {
-        let (t_value, v1_value) = Self::parse_sig_header("test")?;
+    pub async fn verify_webhook_sig(
+        self,
+        header: &str,
+        body: Bytes,
+    ) -> Result<Self, TailscaleWebhookError> {
+        let (t_value, v1_value) = Self::parse_sig_header(header)?;
         let (stamp, hash) = Self::validate_values(t_value, &v1_value)?;
-        let unix_timestamp = stamp.timestamp().to_string();
-        let body = "body".to_string();
-        let signature = Self::compute_signature(format!("{unix_timestamp}.{body}"))?;
-        let mut mac = Hmac::<Sha256>::new_from_slice(b"secret key").expect("any size");
-        mac.update(hash);
-        match mac.verify_slice(signature) {
-            Ok(_) => serde_json::from_str("data").map_err(TailscaleWebhookError::from),
+        let unix_timestamp = stamp.timestamp();
+
+        info!(unix_timestamp);
+        let timestamp_bytes = unix_timestamp.to_be_bytes();
+
+        let mut buf = BytesMut::new();
+        buf.put_slice(&timestamp_bytes);
+        buf.put_slice(b".");
+        buf.put_slice(&body);
+
+        let mut mac = Hmac::<Sha256>::new_from_slice(SECRET.as_bytes())
+            .expect("HMAC can take key of any size");
+        mac.update(&buf);
+
+        match mac.verify_slice(hash) {
+            Ok(_) => serde_json::from_slice(&body).map_err(TailscaleWebhookError::from),
             Err(_) => Err(TailscaleWebhookError::NotSigned),
         }
     }
@@ -56,8 +72,6 @@ impl Event {
                     expected: "t=<unix timestamp>".to_string(),
                     found: t_part.to_string(),
                 })?;
-        //.and_then(|val| val.parse::<i64>()
-        //.map_err(|err| TailscaleWebhookError::from(err)))?;
 
         let v1_value =
             v1_part
@@ -66,23 +80,6 @@ impl Event {
                     expected: "v1=<signature>".to_string(),
                     found: v1_part.to_string(),
                 })?;
-        //.map(|val| val.to_string())?;
-        //.ok_or_else(|| TailscaleWebhookError::InvalidHeader { expected: "v1=<signature>".to_string(), found: v1_part.to_string() })?;
-
-        // let timestamp: DateTime<Utc> = match chrono::Utc.timestamp_opt(t_value, 0) {
-        //     LocalResult::None => Err(TailscaleWebhookError::IncorrectTimestamp { found: t_value.to_string() }),
-        //     LocalResult::Single(t) => Ok(t),
-        //     chrono::LocalResult::Ambiguous(t1, t2) => {
-        //         warn!(t1 = "{t1:?}", t2 = "{t2:?}", "Got ambigious timestamp");
-        //         if (t1 - t2).num_minutes() == 0 {
-        //             info!("Less than a minute difference, using the farthest from now");
-        //             Ok(t1)
-        //         } else {
-        //             error!("More than a minute difference. Something has likely gone very wrong, discarding");
-        //             Err(TailscaleWebhookError::IncorrectTimestamp { found: "".to_string() })
-        //         }
-        //     },
-        // }?;
 
         Ok((t_value.to_string(), v1_value.to_string()))
     }
@@ -99,17 +96,18 @@ impl Event {
 
     #[tracing::instrument]
     fn validate_t(t: String) -> Result<DateTime<Utc>, TailscaleWebhookError> {
-        unimplemented!()
+        let t_value = t.parse::<i64>().map_err(TailscaleWebhookError::from)?;
+        let timestamp: DateTime<Utc> = match chrono::Utc.timestamp_opt(t_value, 0) {
+            LocalResult::None => Err(TailscaleWebhookError::IncorrectTimestamp { found: t_value.to_string() }),
+            LocalResult::Single(t) => Ok(t),
+            LocalResult::Ambiguous(_, _) => unreachable!("A timestamp was parsed ambigiously. This should never happen with `timestamp_opt` function, so something has gone terribly wrong.")
+        }?;
+        Ok(timestamp)
     }
 
     #[tracing::instrument]
     fn validate_v1(v1: &str) -> Result<&[u8], TailscaleWebhookError> {
         Ok(v1.as_bytes())
-    }
-
-    #[tracing::instrument]
-    fn compute_signature(base: String) -> Result<&'static [u8], TailscaleWebhookError> {
-        unimplemented!()
     }
 }
 
