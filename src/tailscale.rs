@@ -3,25 +3,29 @@ use axum::body::Bytes;
 use bytes::{BufMut, BytesMut};
 use chrono::{DateTime, Utc};
 use chrono::{LocalResult, TimeZone};
+use derive_more::Display;
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use sha2::Sha256;
 use tokio::fs;
 use tracing::{info, warn};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Display)]
+#[display(fmt = "Event data: {timestamp}, {version}, {type}, {tailnet}, {message}")]
 pub struct Event {
     timestamp: String,
     version: i8,
     r#type: String,
     tailnet: String,
     message: String,
-    data: String,
+    #[display("{data:#?}")]
+    data: Option<Value>,
 }
 
 impl Event {
-    #[warn(clippy::unused_async, clippy::expect_used)]
+    #[warn(clippy::expect_used)]
     #[tracing::instrument]
     pub async fn verify_webhook_sig(
         self,
@@ -57,14 +61,18 @@ impl Event {
     #[tracing::instrument]
     fn parse_sig_header(header: &str) -> Result<(String, String), TailscaleWebhookError> {
         if header.is_empty() {
-            return Err(TailscaleWebhookError::EmptyHeader);
+            return Err(TailscaleWebhookError::InvalidHeader {
+                error: "empty header".to_string(),
+            });
         };
 
         let parts: Vec<&str> = header.split(',').collect();
         if parts.len() != 2 {
             return Err(TailscaleWebhookError::InvalidHeader {
-                expected: "t=<unix timestamp>,v1=<signature>".to_string(),
-                found: parts.join(","),
+                error: format!(
+                    "expected t=<unix timestamp>,v1=<signature>, got {}",
+                    parts.join(",")
+                ),
             });
         }
 
@@ -75,16 +83,14 @@ impl Event {
             t_part
                 .strip_prefix("t=")
                 .ok_or_else(|| TailscaleWebhookError::InvalidHeader {
-                    expected: "t=<unix timestamp>".to_string(),
-                    found: t_part.to_string(),
+                    error: format!("expected t=<unix timestamp>, got {t_part}"),
                 })?;
 
         let v1_value =
             v1_part
                 .strip_prefix("v1=")
                 .ok_or_else(|| TailscaleWebhookError::InvalidHeader {
-                    expected: "v1=<signature>".to_string(),
-                    found: v1_part.to_string(),
+                    error: format!("expected v1=<signature>, got {v1_part}"),
                 })?;
 
         Ok((t_value.to_string(), v1_value.to_string()))
@@ -108,7 +114,20 @@ impl Event {
             LocalResult::Single(t) => Ok(t),
             LocalResult::Ambiguous(_, _) => unreachable!("A timestamp was parsed ambigiously. This should never happen with `timestamp_opt` function, so something has gone terribly wrong.")
         }?;
-        Ok(timestamp)
+
+        let now = Utc::now();
+        match now.signed_duration_since(timestamp).num_seconds() {
+            x if x > 300 => Err(TailscaleWebhookError::IncorrectTimestamp {
+                found: "too old".to_string(),
+            }),
+            x if x < 0 => Err(TailscaleWebhookError::IncorrectTimestamp {
+                found: "negative timestamp".to_string(),
+            }),
+            other => Ok({
+                info!(time_diff = other, "calculated time difference");
+                timestamp
+            }),
+        }
     }
 
     #[tracing::instrument]
@@ -124,38 +143,49 @@ mod tests {
     #[test]
     fn empty_header() {
         let result = Event::parse_sig_header("").unwrap_err();
-        assert_eq!(result, TailscaleWebhookError::EmptyHeader);
+        assert_eq!(
+            result,
+            TailscaleWebhookError::InvalidHeader {
+                error: "empty header".to_string()
+            }
+        );
     }
 
     #[test]
     fn wrong_args_header() {
-        let result = Event::parse_sig_header("foo,bar,baz").unwrap_err();
+        let input = "foo,bar,baz";
+        let result = Event::parse_sig_header(input).unwrap_err();
         assert_eq!(
             result,
             TailscaleWebhookError::InvalidHeader {
-                expected: "t=<unix timestamp>,v1=<signature>".to_string(),
-                found: "foo,bar,baz".to_string(),
+                error: format!("expected t=<unix timestamp>,v1=<signature>, got {input}")
             }
         );
     }
 
     #[test]
     fn invalid_header() {
-        let result = Event::parse_sig_header("foo,v1=bar").unwrap_err();
+        let input = "foo,v1=bar";
+        let result = Event::parse_sig_header(input).unwrap_err();
         assert_eq!(
             result,
             TailscaleWebhookError::InvalidHeader {
-                expected: "t=<unix timestamp>".to_string(),
-                found: "foo".to_string(),
+                error: format!(
+                    "expected t=<unix timestamp>, got {}",
+                    input.split(',').collect::<Vec<&str>>()[0]
+                )
             }
         );
 
-        let result = Event::parse_sig_header("t=123,bar").unwrap_err();
+        let input = "t=123,bar";
+        let result = Event::parse_sig_header(input).unwrap_err();
         assert_eq!(
             result,
             TailscaleWebhookError::InvalidHeader {
-                expected: "v1=<signature>".to_string(),
-                found: "bar".to_string(),
+                error: format!(
+                    "expected v1=<signature>, got {}",
+                    input.split(',').collect::<Vec<&str>>()[1]
+                )
             }
         );
     }

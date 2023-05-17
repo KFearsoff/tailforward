@@ -7,8 +7,8 @@ use thiserror::Error;
 pub enum TailscaleWebhookError {
     #[error("webhook has no signature")]
     NotSigned,
-    #[error("webhook has an invalid signature (expected {expected:?}, found {found:?})")]
-    InvalidHeader { expected: String, found: String },
+    #[error("webhook has an invalid signature: {error}")]
+    InvalidHeader { error: String },
     #[error("Tailscale-Webhook-Signature header is empty")]
     EmptyHeader,
     #[error("incorrect unix timestamp ({found:?})")]

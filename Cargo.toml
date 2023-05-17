@@ -10,6 +10,7 @@ axum = { version = "0.6", features = ["headers"] }
 bytes = "1"
 chrono = "0.4"
 color-eyre = "0.6"
+derive_more = "0.99"
 hmac = "0.12"
 secrecy = "0.8"
 serde = { version = "1.0.1", features = ["derive"] }
