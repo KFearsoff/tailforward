@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use tracing::{error, info};
 
 use crate::tailscale::Event;
+use crate::telegram::Message;
 
 #[tracing::instrument]
 pub async fn webhook_handler(headers: HeaderMap, body: Bytes) -> impl IntoResponse {
@@ -30,14 +31,25 @@ pub async fn webhook_handler(headers: HeaderMap, body: Bytes) -> impl IntoRespon
         }
     };
 
-    match Event::get(header, body).await {
-        Ok(val) => {
-            info!("{val:?}");
-            StatusCode::OK
-        }
+    let events = match Event::get(header, body).await {
+        Ok(val) => val,
         Err(err) => {
-            error!("{err}");
-            StatusCode::UNPROCESSABLE_ENTITY
+            return {
+                error!("{err}");
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
+        }
+    };
+    info!(events = "{events:?}", "Got events");
+
+    match Message::post(events).await {
+        Ok(status) => status,
+        Err(err) => {
+            let nice_err = err.without_url();
+            error!("{nice_err:?}");
+            nice_err
+                .status()
+                .map_or(StatusCode::INTERNAL_SERVER_ERROR, |code| code)
         }
     }
 }
