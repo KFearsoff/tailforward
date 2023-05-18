@@ -7,7 +7,7 @@ use crate::tailscale::Event;
 use crate::telegram::Message;
 
 #[tracing::instrument]
-pub async fn webhook_handler(headers: HeaderMap, body: Bytes) -> impl IntoResponse {
+pub async fn webhook_handler(headers: HeaderMap, body: String) -> impl IntoResponse {
     let header_result = match headers.get("Tailscale-Webhook-Signature") {
         Some(val) => val.to_str().map_err(|err| {
             error!("{err}");

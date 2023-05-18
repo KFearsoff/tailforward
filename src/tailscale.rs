@@ -25,14 +25,14 @@ pub struct Event {
 }
 
 impl Event {
-    pub async fn get(header: &str, body: Bytes) -> Result<Vec<Self>, TailscaleWebhookError> {
+    pub async fn get(header: &str, body: String) -> Result<Vec<Self>, TailscaleWebhookError> {
         let secret: SecretString = fs::read_to_string("/secrets/tailscale-webhook")
             .await
             .map_err(TailscaleWebhookError::from)?
             .into();
         let verified = Self::verify_webhook_sig(secret, header, &body);
         match verified {
-            Ok(_) => serde_json::from_slice(&body).map_err(TailscaleWebhookError::from),
+            Ok(_) => serde_json::from_str(&body).map_err(TailscaleWebhookError::from),
             Err(_) => Err(TailscaleWebhookError::NotSigned),
         }
     }
@@ -42,7 +42,7 @@ impl Event {
     pub fn verify_webhook_sig(
         secret: SecretString,
         header: &str,
-        body: &Bytes,
+        body: &str,
     ) -> Result<(), TailscaleWebhookError> {
         let (t_value, v1_value) = Self::parse_sig_header(header)?;
         let (stamp, hash) = Self::validate_values(t_value, &v1_value)?;
@@ -51,16 +51,26 @@ impl Event {
         info!(unix_timestamp);
         let timestamp_bytes = unix_timestamp.to_be_bytes();
 
-        let mut buf = BytesMut::new();
-        buf.put_slice(&timestamp_bytes);
-        buf.put_slice(b".");
-        buf.put_slice(body);
+        let json_str = body;
+
+        //        let mut buf = BytesMut::new();
+        //        buf.put_slice(&timestamp_bytes);
+        //        buf.put_slice(b".");
+        //        buf.put_slice(body);
+        //
+        //        let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())
+        //            .expect("HMAC can take key of any size");
+        //        mac.update(&buf);
+        //
+        //        mac.verify_slice(hash)
+        //            .map_err(|_| TailscaleWebhookError::NotSigned)
 
         let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())
             .expect("HMAC can take key of any size");
-        mac.update(&buf);
+        mac.update(json_str.as_bytes());
 
-        mac.verify_slice(hash)
+        let code_bytes = hex::decode(v1_value).expect("Can't decode hex");
+        mac.verify_slice(&code_bytes[..])
             .map_err(|_| TailscaleWebhookError::NotSigned)
     }
 
@@ -145,6 +155,7 @@ impl Event {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn empty_header() {
@@ -200,6 +211,22 @@ mod tests {
     fn correct_header() {
         let result = Event::parse_sig_header("t=foo,v1=bar").unwrap();
         assert_eq!(result, ("foo".to_string(), "bar".to_string()));
+    }
+
+    #[test]
+    fn correct_validation() {
+        let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
+        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
+        let v1_val = "a738edd5854dbdea2e94692bf5791309a6b07efa537c2f125a6bddb2a0c18151";
+        let secret = SecretString::from_str("123").unwrap();
+        let input = format!("{}.{}", "1684356735", json_str);
+
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())
+            .expect("HMAC can take key of any size");
+        mac.update(input.as_bytes());
+
+        let code_bytes = hex::decode(v1_val).unwrap();
+        mac.verify_slice(&code_bytes[..]).unwrap();
     }
 
     // #[test]
