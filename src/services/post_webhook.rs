@@ -12,19 +12,11 @@ pub fn post_webhook(
     datetime: DateTime<Utc>,
     secret: &str,
 ) -> Result<Vec<Event>, Report> {
-    // Axum extracts body as String with backslashes to escape double quotes.
-    // The body is signed without those backslashes, so we trim them if they exist.
-    // TODO: add tests
-    debug!(body, "Got body");
-    let body_no_backslashes = body.replace(r#"\\"#, r#""#);
-    debug!(body_no_backslashes, "Stripped of backslashes");
-
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
 
-    let string_to_sign = format!(r#"{t}.{body_no_backslashes}"#);
+    let string_to_sign = format!("{t}.{body}");
     debug!(string_to_sign, "Got string to sign");
-    debug!(literal = r#"{string_to_sign}"#, "Displayed as literal");
     verify_sig(v, &string_to_sign, secret)?;
 
     Ok(serde_json::from_str::<Vec<Event>>(body)?)
@@ -90,8 +82,13 @@ fn compare_timestamp(
 
 #[tracing::instrument]
 fn verify_sig(sig: &str, content: &str, secret: &str) -> Result<(), TailscaleWebhook> {
+    // Axum extracts body as String with backslashes to escape double quotes.
+    // The body is signed without those backslashes, so we trim them if they exist.
+    // TODO: add tests
+    let content_stripped = content.replace(r#"\"#, r#""#);
+
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())?;
-    mac.update(content.as_bytes());
+    mac.update(content_stripped.as_bytes());
     let code_bytes = hex::decode(sig)?;
     mac.verify_slice(&code_bytes[..])?;
     Ok(())
@@ -114,9 +111,7 @@ mod tests {
         let header = format!("t={},v1={}", timestamp_input, v1_val);
 
         let out = post_webhook(&header, body, datetime, secret.expose_secret());
-        out.unwrap();
-
-        //assert!(out.is_ok());
+        assert!(out.is_ok());
     }
 
     #[test]
@@ -232,6 +227,18 @@ mod tests {
     }
 
     #[test]
+    fn sig_verify_backslashes_good() {
+        let json_str = r#"[{\"timestamp\":\"2023-05-17T11:13:07.62352885Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#;
+        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
+        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
+        let secret = SecretString::from_str("123").unwrap();
+        let input = format!("{}.{}", "1684518293", json_str);
+        let out = verify_sig(v1_val, &input, secret.expose_secret());
+
+        assert!(out.is_ok());
+    }
+
+    #[test]
     fn sig_verify_wrong_secret() {
         let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
         // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
@@ -265,13 +272,5 @@ mod tests {
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_err());
-    }
-
-    #[test]
-    fn trim_backslashes() {
-        let input = r#"[{\"timestamp\":\"2023-05-19T17:15:05.137256149Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#.to_string();
-        let output = input.replace(r#"\\"#, r#""#);
-
-        assert!(output.contains('\\'));
     }
 }
