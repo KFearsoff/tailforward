@@ -16,7 +16,7 @@ pub fn post_webhook(
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
     debug!(body, "Got body");
-    let body_no_backslashes = body.replace('\\', "");
+    let body_no_backslashes = body.replace(r#"\\"#, r#""#);
     debug!(body_no_backslashes, "Stripped of backslashes");
 
     let (t, v) = parse_header(header)?;
@@ -265,5 +265,13 @@ mod tests {
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_err());
+    }
+
+    #[test]
+    fn trim_backslashes() {
+        let input = r#"[{\"timestamp\":\"2023-05-19T17:15:05.137256149Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#.to_string();
+        let output = input.replace(r#"\\"#, r#""#);
+
+        assert!(output.contains('\\'));
     }
 }
