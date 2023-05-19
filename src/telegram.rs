@@ -1,4 +1,4 @@
-use crate::tailscale::Event;
+use crate::models::event::Event;
 use reqwest::{Result, StatusCode};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};

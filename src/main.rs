@@ -1,55 +1,54 @@
-use axum::routing::{post, Router};
-use color_eyre::eyre::Result;
-use std::net::SocketAddr;
-use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
-use tracing::{
-    dispatcher::{self, Dispatch},
-    info,
+use axum::{
+    routing::{post, Router},
+    Extension,
 };
+use color_eyre::eyre::Result;
+use secrecy::SecretString;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use tower_http::trace::TraceLayer;
+use tracing::info;
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
-use ts_to_tg::{axumlib, handle};
+use ts_to_tg::{axumlib, handlers::post_webhook::webhook_handler};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    setup_tracing()?;
+    setup_tracing();
     setup_server().await?;
     Ok(())
 }
 
-fn setup_tracing() -> Result<()> {
+fn setup_tracing() {
     let env_filter = EnvFilter::try_from_default_env()
         .map_or_else(|_| EnvFilter::new("info"), |env_filter| env_filter);
-    let subscriber = Registry::default()
+    Registry::default()
         .with(env_filter)
         .with(
             HierarchicalLayer::new(2)
                 .with_targets(true)
                 .with_bracketed_fields(true),
         )
-        .with(ErrorLayer::default());
+        .with(ErrorLayer::default())
+        .init();
 
-    dispatcher::set_global_default(Dispatch::new(subscriber))?;
     info!("Initialized tracing and logging systems");
-
-    Ok(())
 }
 
 async fn setup_server() -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 33010));
     info!(addr = &addr.to_string(), "Will use socket address");
+    let ts = SecretString::from_str("ts")?;
+    //let tg = SecretString::from_str("tg")?;
 
     let app = Router::new()
         .fallback(axumlib::fallback)
-        .route("/", post(handle::webhook_handler))
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .into_inner(),
-        );
+        .route("/", post(webhook_handler))
+        .layer(TraceLayer::new_for_http())
+        .layer(Extension(ts));
+    //.layer(Extension(tg));
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
