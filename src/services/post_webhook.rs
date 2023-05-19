@@ -14,8 +14,8 @@ pub fn post_webhook(
 ) -> Result<Vec<Event>, Report> {
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
-    let _string_to_sign = format!("{t}.{body}");
-    verify_sig(v, body, secret)?;
+    let string_to_sign = format!("{t}.{body}");
+    verify_sig(v, &string_to_sign, secret)?;
     Ok(serde_json::from_str::<Vec<Event>>(body)?)
 }
 
@@ -93,6 +93,22 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
+    fn post_webhook_good() {
+        let body = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
+        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
+        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
+        let timestamp_input: i64 = 1684518293;
+        let datetime = chrono::Utc.timestamp_opt(timestamp_input, 0).unwrap();
+        let secret = SecretString::from_str("123").unwrap();
+        let header = format!("t={},v1={}", timestamp_input, v1_val);
+
+        let out = post_webhook(&header, body, datetime, secret.expose_secret());
+        out.unwrap();
+
+        //assert!(out.is_ok());
+    }
+
+    #[test]
     fn header_good() {
         let header = "t=foo,v1=bar";
         let (t, v1) = parse_header(header).unwrap();
@@ -144,7 +160,7 @@ mod tests {
 
     #[test]
     fn timestamp_good() {
-        let timestamp_input: i64 = 1684356735;
+        let timestamp_input: i64 = 1684518293;
         let timestamp = timestamp_input.to_string();
         let now = chrono::Utc.timestamp_opt(timestamp_input, 0).unwrap();
         let out = compare_timestamp(&timestamp, now);
@@ -154,7 +170,7 @@ mod tests {
 
     #[test]
     fn timestamp_newer() {
-        let timestamp_input: i64 = 1684356735;
+        let timestamp_input: i64 = 1684518293;
         let timestamp = timestamp_input.to_string();
         let now = chrono::Utc.timestamp_opt(timestamp_input - 1, 0).unwrap();
         let out = compare_timestamp(&timestamp, now);
@@ -164,7 +180,7 @@ mod tests {
 
     #[test]
     fn timestamp_older_good() {
-        let timestamp_input: i64 = 1684356735;
+        let timestamp_input: i64 = 1684518293;
         let timestamp = timestamp_input.to_string();
         let now = chrono::Utc.timestamp_opt(timestamp_input + 299, 0).unwrap();
         let out = compare_timestamp(&timestamp, now);
@@ -174,7 +190,7 @@ mod tests {
 
     #[test]
     fn timestamp_older_equal() {
-        let timestamp_input: i64 = 1684356735;
+        let timestamp_input: i64 = 1684518293;
         let timestamp = timestamp_input.to_string();
         let now = chrono::Utc.timestamp_opt(timestamp_input + 300, 0).unwrap();
         let out = compare_timestamp(&timestamp, now);
@@ -184,7 +200,7 @@ mod tests {
 
     #[test]
     fn timestamp_older_newer() {
-        let timestamp_input: i64 = 1684356735;
+        let timestamp_input: i64 = 1684518293;
         let timestamp = timestamp_input.to_string();
         let now = chrono::Utc.timestamp_opt(timestamp_input + 301, 0).unwrap();
         let out = compare_timestamp(&timestamp, now);
@@ -196,9 +212,9 @@ mod tests {
     fn sig_verify_good() {
         let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
         // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val = "a738edd5854dbdea2e94692bf5791309a6b07efa537c2f125a6bddb2a0c18151";
+        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
-        let input = format!("{}.{}", "1684356735", json_str);
+        let input = format!("{}.{}", "1684518293", json_str);
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_ok());
@@ -208,9 +224,9 @@ mod tests {
     fn sig_verify_wrong_secret() {
         let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
         // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val = "a738edd5854dbdea2e94692bf5791309a6b07efa537c2f125a6bddb2a0c18151";
+        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("1234").unwrap();
-        let input = format!("{}.{}", "1684356735", json_str);
+        let input = format!("{}.{}", "1684518293", json_str);
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_err());
@@ -220,9 +236,9 @@ mod tests {
     fn sig_verify_wrong_input() {
         let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"TEST","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
         // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val = "a738edd5854dbdea2e94692bf5791309a6b07efa537c2f125a6bddb2a0c18151";
+        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
-        let input = format!("{}.{}", "1684356735", json_str);
+        let input = format!("{}.{}", "1684518293", json_str);
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_err());
@@ -232,9 +248,9 @@ mod tests {
     fn sig_verify_wrong_sig() {
         let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
         // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val = "b738edd5854dbdea2e94692bf5791309a6b07efa537c2f125a6bddb2a0c18151";
+        let v1_val = "52c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
-        let input = format!("{}.{}", "1684356735", json_str);
+        let input = format!("{}.{}", "1684518293", json_str);
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_err());
