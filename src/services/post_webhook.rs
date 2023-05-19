@@ -12,6 +12,10 @@ pub fn post_webhook(
     datetime: DateTime<Utc>,
     secret: &str,
 ) -> Result<Vec<Event>, Report> {
+    // Axum extracts body as String with backslashes to escape double quotes.
+    // The body is signed without those backslashes, so we trim them if they exist.
+    // TODO: add tests
+    let header = &header.replace('\\', "");
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
     let string_to_sign = format!("{t}.{body}");
