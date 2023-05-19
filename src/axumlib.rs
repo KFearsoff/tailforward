@@ -1,15 +1,14 @@
-#![allow(clippy::unused_async, clippy::expect_used)]
-
 use axum::http::StatusCode;
 use tokio::signal;
 use tracing::{info, warn};
 
 #[tracing::instrument]
+#[allow(clippy::expect_used)]
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
-            .expect("Failed to install Ctrl+C handler");
+            .expect("Failed to install Ctrl-C handler");
         info!("Ctrl-C received");
     };
 

@@ -1,5 +1,6 @@
 use crate::models::{error::TailscaleWebhook, event::Event};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
+use color_eyre::Report;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use tracing::info;
@@ -10,10 +11,10 @@ pub fn post_webhook(
     body: &str,
     datetime: DateTime<Utc>,
     secret: &str,
-) -> Result<Vec<Event>, TailscaleWebhook> {
+) -> Result<Vec<Event>, Report> {
     let (t, v) = parse_header(header)?;
-    let timestamp = compare_timestamp(t, datetime)?;
-    let string_to_sign = format!("{t}.{body}");
+    let _timestamp = compare_timestamp(t, datetime)?;
+    let _string_to_sign = format!("{t}.{body}");
     verify_sig(v, body, secret)?;
     Ok(serde_json::from_str::<Vec<Event>>(body)?)
 }
