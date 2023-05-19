@@ -1,5 +1,5 @@
 [package]
-name = "ts_to_tg"
+name = "tailforward"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.6", features = ["headers"] }
-bytes = "1"
 chrono = { version = "0.4", features = ["serde"] }
 color-eyre = "0.6"
 hmac = "0.12"
@@ -17,7 +16,6 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
-tower = "0.4"
 tower-http = { version = "0.4", features = ["trace"] }
 tracing = "0.1"
 tracing-error = "0.2"

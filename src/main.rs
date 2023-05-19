@@ -6,12 +6,12 @@ use color_eyre::eyre::Result;
 use secrecy::SecretString;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use tailforward::{axumlib, handlers::post_webhook::webhook_handler};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
-use ts_to_tg::{axumlib, handlers::post_webhook::webhook_handler};
 
 #[tokio::main]
 async fn main() -> Result<()> {
