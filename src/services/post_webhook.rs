@@ -3,7 +3,7 @@ use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use color_eyre::Report;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use tracing::info;
+use tracing::{debug, info};
 
 #[tracing::instrument]
 pub fn post_webhook(
@@ -15,11 +15,18 @@ pub fn post_webhook(
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
-    let body = &body.replace('\\', "");
+    debug!(body, "Got body");
+    let body_no_backslashes = body.replace('\\', "");
+    debug!(body_no_backslashes, "Stripped of backslashes");
+
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
-    let string_to_sign = format!("{t}.{body}");
+
+    let string_to_sign = format!(r#"{t}.{body_no_backslashes}"#);
+    debug!(string_to_sign, "Got string to sign");
+    debug!(literal = r#"{string_to_sign}"#, "Displayed as literal");
     verify_sig(v, &string_to_sign, secret)?;
+
     Ok(serde_json::from_str::<Vec<Event>>(body)?)
 }
 
