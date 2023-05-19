@@ -19,6 +19,7 @@ pub async fn webhook_handler(
         .get("Tailscale-Webhook-Signature")
         .ok_or_else(|| eyre!("no header"))?;
     let header = header_opt.to_str().map_err(|err| eyre!("{err}"))?;
+    info!(header, "Got header");
     let now = Utc::now();
     let events = post_webhook(header, &body, now, secret.expose_secret())?;
     info!(events = "{events:?}", "Got events");
