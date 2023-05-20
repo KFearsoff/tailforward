@@ -1,4 +1,5 @@
 use axum::http::StatusCode;
+use secrecy::SecretString;
 use tokio::signal;
 use tracing::{info, warn};
 
@@ -41,4 +42,11 @@ pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse
         "Failed to serve"
     );
     (status, format!("No route {uri}"))
+}
+
+#[derive(Clone, Debug)]
+pub struct State {
+    pub tailscale_secret: SecretString,
+    pub telegram_secret: SecretString,
+    pub reqwest_client: reqwest::Client,
 }

@@ -1,17 +1,16 @@
 use crate::models::report::Report;
 use crate::services::post_webhook::post_webhook;
 use crate::services::telegram::post;
-use axum::extract::Extension;
+use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use chrono::Utc;
 use color_eyre::eyre::eyre;
-use secrecy::SecretString;
 use tracing::info;
 
 #[tracing::instrument]
 pub async fn webhook_handler(
-    Extension(secret): Extension<SecretString>,
+    State(state): State<crate::axumlib::State>,
     headers: HeaderMap,
     body: String,
 ) -> Result<impl IntoResponse, Report> {
@@ -21,8 +20,13 @@ pub async fn webhook_handler(
     let header = header_opt.to_str().map_err(|err| eyre!("{err}"))?;
     info!(header, "Got header");
     let now = Utc::now();
-    let events = post_webhook(header, &body, now, &secret)?;
+
+    let ts_secret = state.tailscale_secret;
+    let events = post_webhook(header, &body, now, &ts_secret)?;
     info!(events = "{events:?}", "Got events");
-    post(events).await?;
+
+    let tg_secret = state.telegram_secret;
+    let reqwest_client = state.reqwest_client;
+    post(events, reqwest_client, tg_secret).await?;
     Ok(())
 }

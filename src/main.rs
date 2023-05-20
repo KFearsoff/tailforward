@@ -1,7 +1,4 @@
-use axum::{
-    routing::{post, Router},
-    Extension,
-};
+use axum::routing::{post, Router};
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
 use std::net::SocketAddr;
@@ -37,19 +34,33 @@ fn setup_tracing() {
     info!("Initialized tracing and logging systems");
 }
 
+#[tracing::instrument]
 async fn setup_server() -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 33010));
     info!(addr = &addr.to_string(), "Will use socket address");
-    let ts: SecretString = read_to_string("/secrets/tailscale-webhook").await?.into();
-    info!("Read Telegram secret");
-    //let tg = SecretString::from_str("tg")?;
+
+    let tailscale_secret: SecretString = read_to_string("/secrets/tailscale-webhook").await?.into();
+    let telegram_secret: SecretString = read_to_string("/secrets/telegram")
+        .await?
+        .split('=')
+        .collect::<Vec<_>>()[1]
+        .to_string()
+        .into();
+    info!("Read secrets");
+    let reqwest_client = reqwest::Client::new();
+    info!("Created reqwest client");
+
+    let state = axumlib::State {
+        tailscale_secret,
+        telegram_secret,
+        reqwest_client,
+    };
 
     let app = Router::new()
         .fallback(axumlib::fallback)
         .route("/", post(webhook_handler))
         .layer(TraceLayer::new_for_http())
-        .layer(Extension(ts));
-    //.layer(Extension(tg));
+        .with_state(state);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
