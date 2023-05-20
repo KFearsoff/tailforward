@@ -5,8 +5,8 @@ use axum::{
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use tailforward::{axumlib, handlers::post_webhook::webhook_handler};
+use tokio::fs::read_to_string;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_error::ErrorLayer;
@@ -40,7 +40,8 @@ fn setup_tracing() {
 async fn setup_server() -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 33010));
     info!(addr = &addr.to_string(), "Will use socket address");
-    let ts = SecretString::from_str("ts")?;
+    let ts: SecretString = read_to_string("/secrets/tailscale-webhook").await?.into();
+    info!("Read Telegram secret");
     //let tg = SecretString::from_str("tg")?;
 
     let app = Router::new()
