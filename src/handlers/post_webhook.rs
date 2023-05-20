@@ -21,7 +21,7 @@ pub async fn webhook_handler(
     let header = header_opt.to_str().map_err(|err| eyre!("{err}"))?;
     info!(header, "Got header");
     let now = Utc::now();
-    let events = post_webhook(header, &body, now, secret)?;
+    let events = post_webhook(header, &body, now, &secret)?;
     info!(events = "{events:?}", "Got events");
     post(events).await?;
     Ok(())

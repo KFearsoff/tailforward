@@ -11,7 +11,7 @@ pub fn post_webhook(
     header: &str,
     body: &str,
     datetime: DateTime<Utc>,
-    secret: SecretString,
+    secret: &SecretString,
 ) -> Result<Vec<Event>, Report> {
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
@@ -83,7 +83,7 @@ fn compare_timestamp(
 
 #[tracing::instrument]
 #[allow(clippy::unwrap_used)]
-fn verify_sig(sig: &str, content: &str, secret: SecretString) -> Result<(), TailscaleWebhook> {
+fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), TailscaleWebhook> {
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
@@ -113,7 +113,7 @@ mod tests {
         let secret = SecretString::from_str("123").unwrap();
         let header = format!("t={},v1={}", timestamp_input, v1_val);
 
-        let out = post_webhook(&header, body, datetime, secret);
+        let out = post_webhook(&header, body, datetime, &secret);
         assert!(out.is_ok());
     }
 
@@ -224,7 +224,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret);
+        let out = verify_sig(v1_val, &input, &secret);
 
         assert!(out.is_ok());
     }
@@ -236,7 +236,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret);
+        let out = verify_sig(v1_val, &input, &secret);
 
         assert!(out.is_ok());
     }
@@ -257,7 +257,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("1234").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret);
+        let out = verify_sig(v1_val, &input, &secret);
 
         assert!(out.is_err());
     }
@@ -269,7 +269,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret);
+        let out = verify_sig(v1_val, &input, &secret);
 
         assert!(out.is_err());
     }
@@ -281,7 +281,7 @@ mod tests {
         let v1_val = "52c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret);
+        let out = verify_sig(v1_val, &input, &secret);
 
         assert!(out.is_err());
     }
