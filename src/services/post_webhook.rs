@@ -2,6 +2,7 @@ use crate::models::{error::TailscaleWebhook, event::Event};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use color_eyre::Report;
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret, SecretString};
 use sha2::Sha256;
 use tracing::{debug, info};
 
@@ -10,7 +11,7 @@ pub fn post_webhook(
     header: &str,
     body: &str,
     datetime: DateTime<Utc>,
-    secret: &str,
+    secret: SecretString,
 ) -> Result<Vec<Event>, Report> {
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
@@ -82,14 +83,14 @@ fn compare_timestamp(
 
 #[tracing::instrument]
 #[allow(clippy::unwrap_used)]
-fn verify_sig(sig: &str, content: &str, secret: &str) -> Result<(), TailscaleWebhook> {
+fn verify_sig(sig: &str, content: &str, secret: SecretString) -> Result<(), TailscaleWebhook> {
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
-    let stripped = content.replace('\\', "");
+    let stripped: &str = &content.replace('\\', "");
     debug!(stripped, "Stripped content");
 
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())?;
     mac.update(stripped.as_bytes());
     let code_bytes = hex::decode(sig)?;
     mac.verify_slice(&code_bytes[..])?;
@@ -99,7 +100,7 @@ fn verify_sig(sig: &str, content: &str, secret: &str) -> Result<(), TailscaleWeb
 #[cfg(test)]
 mod tests {
     use super::*;
-    use secrecy::{ExposeSecret, SecretString};
+    use secrecy::SecretString;
     use std::str::FromStr;
 
     #[test]
@@ -112,7 +113,7 @@ mod tests {
         let secret = SecretString::from_str("123").unwrap();
         let header = format!("t={},v1={}", timestamp_input, v1_val);
 
-        let out = post_webhook(&header, body, datetime, secret.expose_secret());
+        let out = post_webhook(&header, body, datetime, secret);
         assert!(out.is_ok());
     }
 
@@ -223,7 +224,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret.expose_secret());
+        let out = verify_sig(v1_val, &input, secret);
 
         assert!(out.is_ok());
     }
@@ -235,7 +236,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret.expose_secret());
+        let out = verify_sig(v1_val, &input, secret);
 
         assert!(out.is_ok());
     }
@@ -256,7 +257,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("1234").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret.expose_secret());
+        let out = verify_sig(v1_val, &input, secret);
 
         assert!(out.is_err());
     }
@@ -268,7 +269,7 @@ mod tests {
         let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret.expose_secret());
+        let out = verify_sig(v1_val, &input, secret);
 
         assert!(out.is_err());
     }
@@ -280,7 +281,7 @@ mod tests {
         let v1_val = "52c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
         let secret = SecretString::from_str("123").unwrap();
         let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, secret.expose_secret());
+        let out = verify_sig(v1_val, &input, secret);
 
         assert!(out.is_err());
     }
