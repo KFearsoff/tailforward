@@ -87,10 +87,13 @@ fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), Tai
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
+    debug!(len = content.len(), "Input length");
     let stripped: &str = &content.replace('\\', "");
-    debug!(stripped, "Stripped content");
+    debug!(len = stripped.len(), "Stripped length");
+    let secret_exposed = secret.expose_secret();
+    debug!(len = secret_exposed.len(), "Secret length");
 
-    let mut mac = Hmac::<Sha256>::new_from_slice((*secret).expose_secret().as_bytes())?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret_exposed.as_bytes())?;
     mac.update(stripped.as_bytes());
     let code_bytes = hex::decode(sig)?;
     mac.verify_slice(&code_bytes[..])?;
@@ -248,6 +251,16 @@ mod tests {
         let condition = output.contains('\\');
 
         assert!(!condition);
+    }
+
+    #[test]
+    fn trim_backslashes_len() {
+        let input = r#"[{\"timestamp\":\"2023-05-19T17:15:05.137256149Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#;
+        let input_len = input.len();
+        let output = input.replace('\\', "");
+        let output_len = output.len();
+
+        assert_ne!(input_len, output_len);
     }
 
     #[test]
