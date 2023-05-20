@@ -87,6 +87,7 @@ fn verify_sig(sig: &str, content: &str, secret: &str) -> Result<(), TailscaleWeb
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
     let stripped = content.replace('\\', "");
+    debug!(stripped, "Stripped content");
 
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())?;
     mac.update(stripped.as_bytes());
