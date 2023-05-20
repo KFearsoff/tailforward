@@ -90,7 +90,7 @@ fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), Tai
     let stripped: &str = &content.replace('\\', "");
     debug!(stripped, "Stripped content");
 
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())?;
+    let mut mac = Hmac::<Sha256>::new_from_slice((*secret).expose_secret().as_bytes())?;
     mac.update(stripped.as_bytes());
     let code_bytes = hex::decode(sig)?;
     mac.verify_slice(&code_bytes[..])?;

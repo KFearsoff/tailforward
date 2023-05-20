@@ -1,3 +1,4 @@
+use crate::axumlib::State as MyState;
 use crate::models::report::Report;
 use crate::services::post_webhook::post_webhook;
 use crate::services::telegram::post;
@@ -10,7 +11,7 @@ use tracing::info;
 
 #[tracing::instrument]
 pub async fn webhook_handler(
-    State(state): State<crate::axumlib::State>,
+    State(state): State<MyState>,
     headers: HeaderMap,
     body: String,
 ) -> Result<impl IntoResponse, Report> {
