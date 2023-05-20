@@ -81,14 +81,15 @@ fn compare_timestamp(
 }
 
 #[tracing::instrument]
+#[allow(clippy::unwrap_used)]
 fn verify_sig(sig: &str, content: &str, secret: &str) -> Result<(), TailscaleWebhook> {
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
     // TODO: add tests
-    let content_stripped = content.replace(r#"\"#, r#""#);
+    let stripped = content.replace('\\', "");
 
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())?;
-    mac.update(content_stripped.as_bytes());
+    mac.update(stripped.as_bytes());
     let code_bytes = hex::decode(sig)?;
     mac.verify_slice(&code_bytes[..])?;
     Ok(())
@@ -236,6 +237,15 @@ mod tests {
         let out = verify_sig(v1_val, &input, secret.expose_secret());
 
         assert!(out.is_ok());
+    }
+
+    #[test]
+    fn trim_backslashes() {
+        let input = r#"[{\"timestamp\":\"2023-05-19T17:15:05.137256149Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#;
+        let output = input.replace('\\', "");
+        let condition = output.contains('\\');
+
+        assert!(!condition);
     }
 
     #[test]
