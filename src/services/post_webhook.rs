@@ -4,6 +4,7 @@ use color_eyre::Report;
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret, SecretString};
 use sha2::Sha256;
+use tap::Tap;
 use tracing::{debug, info};
 
 #[tracing::instrument]
@@ -16,8 +17,7 @@ pub fn post_webhook(
     let (t, v) = parse_header(header)?;
     let _timestamp = compare_timestamp(t, datetime)?;
 
-    let string_to_sign = format!("{t}.{body}");
-    debug!(string_to_sign, "Got string to sign");
+    let string_to_sign = format!("{t}.{body}").tap(|str| debug!("Got string to sign: {}", str));
     verify_sig(v, &string_to_sign, secret)?;
 
     Ok(serde_json::from_str::<Vec<Event>>(body)?)
@@ -86,12 +86,13 @@ fn compare_timestamp(
 fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), TailscaleWebhook> {
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
-    // TODO: add tests
     debug!(len = content.len(), "Input length");
-    let stripped: &str = &content.replace('\\', "");
-    debug!(len = stripped.len(), "Stripped length");
-    let secret_exposed = secret.expose_secret();
-    debug!(len = secret_exposed.len(), "Secret length");
+    let stripped: &str = &content
+        .replace('\\', "")
+        .tap(|str| debug!("Stripped length: {}", str.len()));
+    let secret_exposed = secret
+        .expose_secret()
+        .tap_deref_dbg(|val| debug!("Secret is: {}", val));
 
     let mut mac = Hmac::<Sha256>::new_from_slice(secret_exposed.as_bytes())?;
     mac.update(stripped.as_bytes());

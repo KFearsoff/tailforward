@@ -3,9 +3,10 @@ use color_eyre::eyre::Result;
 use secrecy::SecretString;
 use std::net::SocketAddr;
 use tailforward::{axumlib, handlers::post_webhook::webhook_handler};
+use tap::Tap;
 use tokio::fs::read_to_string;
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{debug, info};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
@@ -36,17 +37,34 @@ fn setup_tracing() {
 
 #[tracing::instrument]
 async fn setup_server() -> Result<()> {
-    let addr = SocketAddr::from(([0, 0, 0, 0], 33010));
-    info!(addr = &addr.to_string(), "Will use socket address");
+    let addr = SocketAddr::from(([0, 0, 0, 0], 33010))
+        .tap(|addr| info!("Will use socket address: {}", addr));
 
-    let tailscale_secret: SecretString = read_to_string("/secrets/tailscale-webhook").await?.into();
-    let telegram_secret: SecretString = read_to_string("/secrets/telegram")
+    let tailscale_secret_path = "/secrets/tailscale-webhook";
+    debug!(
+        "Reading Tailscale secret from path: {}",
+        tailscale_secret_path
+    );
+    let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)
+        .await?
+        .tap_dbg(|val| debug!("Secret value is: {}", val))
+        .into();
+    info!("Read Tailscale secret from path: {}", tailscale_secret_path);
+
+    let telegram_secret_path = "/secrets/telegram";
+    debug!(
+        "Reading Telegram secret from path: {}",
+        telegram_secret_path
+    );
+    let telegram_secret: SecretString = read_to_string(telegram_secret_path)
         .await?
         .split('=')
         .collect::<Vec<_>>()[1]
         .to_string()
+        .tap_dbg(|val| debug!("Secret value is: {}", val))
         .into();
-    info!("Read secrets");
+    info!("Read Telegram secret from path: {}", telegram_secret_path);
+
     let reqwest_client = reqwest::Client::new();
     info!("Created reqwest client");
 
