@@ -31,6 +31,7 @@ pub async fn webhook_handler(
 
     let tg_secret = state.telegram_secret;
     let reqwest_client = state.reqwest_client;
-    post(events, reqwest_client, tg_secret).await?;
+    let chat_id = state.chat_id;
+    post(events, reqwest_client, tg_secret, chat_id).await?;
     Ok(())
 }

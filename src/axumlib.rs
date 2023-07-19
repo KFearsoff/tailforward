@@ -49,4 +49,5 @@ pub struct State {
     pub tailscale_secret: SecretString,
     pub telegram_secret: SecretString,
     pub reqwest_client: reqwest::Client,
+    pub chat_id: i64,
 }

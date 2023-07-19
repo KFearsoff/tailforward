@@ -1,9 +1,13 @@
 use axum::routing::{post, Router};
-use camino::Utf8Path;
+
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
-use std::net::SocketAddr;
-use tailforward::{axumlib, handlers::post_webhook::webhook_handler};
+
+use tailforward::{
+    axumlib,
+    config::{Settings},
+    handlers::post_webhook::webhook_handler,
+};
 use tap::Tap;
 use tokio::fs::read_to_string;
 use tower_http::trace::TraceLayer;
@@ -13,10 +17,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use tracing_tree::HierarchicalLayer;
 
 #[tokio::main]
+#[tracing::instrument]
 async fn main() -> Result<()> {
-    color_eyre::install()?;
     setup_tracing();
-    setup_server().await?;
+    color_eyre::install()?;
+    let settings = Settings::new()?.tap(|val| debug!("Read settings: {:?}", val));
+    setup_server(&settings).await?;
     Ok(())
 }
 
@@ -37,11 +43,10 @@ fn setup_tracing() {
 }
 
 #[tracing::instrument]
-async fn setup_server() -> Result<()> {
-    let addr = SocketAddr::from(([0, 0, 0, 0], 33010))
-        .tap(|addr| info!("Will use socket address: {}", addr));
-
-    let tailscale_secret_path = Utf8Path::new("/secrets/tailscale-webhook");
+async fn setup_server(settings: &Settings) -> Result<()> {
+    let addr = settings.address;
+    let chat_id = settings.chat_id;
+    let tailscale_secret_path = &settings.tailscale_secret_file;
     debug!(
         "Reading Tailscale secret from path: {}",
         tailscale_secret_path
@@ -52,7 +57,7 @@ async fn setup_server() -> Result<()> {
         .into();
     info!("Read Tailscale secret from path: {}", tailscale_secret_path);
 
-    let telegram_secret_path = Utf8Path::new("/secrets/telegram");
+    let telegram_secret_path = &settings.telegram_secret_file;
     debug!(
         "Reading Telegram secret from path: {}",
         telegram_secret_path
@@ -73,6 +78,7 @@ async fn setup_server() -> Result<()> {
         tailscale_secret,
         telegram_secret,
         reqwest_client,
+        chat_id,
     };
 
     let app = Router::new()

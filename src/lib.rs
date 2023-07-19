@@ -1,6 +1,5 @@
 pub mod axumlib;
-
-pub const CHAT_ID: i64 = -1_001_864_190_705;
+pub mod config;
 
 pub mod handlers {
     pub mod post_webhook;

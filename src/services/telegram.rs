@@ -1,5 +1,5 @@
 use crate::models::{event::Event, message::Message};
-use crate::CHAT_ID;
+
 use color_eyre::Report;
 use secrecy::{ExposeSecret, SecretString};
 use tracing::{debug, info};
@@ -11,9 +11,10 @@ pub async fn post(
     events: Vec<Event>,
     client: reqwest::Client,
     secret: SecretString,
+    chat_id: i64,
 ) -> Result<(), Report> {
     let text = events.iter().map(|event| Message {
-        chat_id: CHAT_ID,
+        chat_id,
         text: format!("{event:?}"),
     });
     info!("Mapped events to text");
