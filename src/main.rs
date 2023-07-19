@@ -1,4 +1,5 @@
 use axum::routing::{post, Router};
+use camino::Utf8Path;
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
 use std::net::SocketAddr;
@@ -40,7 +41,7 @@ async fn setup_server() -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 33010))
         .tap(|addr| info!("Will use socket address: {}", addr));
 
-    let tailscale_secret_path = "/secrets/tailscale-webhook";
+    let tailscale_secret_path = Utf8Path::new("/secrets/tailscale-webhook");
     debug!(
         "Reading Tailscale secret from path: {}",
         tailscale_secret_path
@@ -51,7 +52,7 @@ async fn setup_server() -> Result<()> {
         .into();
     info!("Read Tailscale secret from path: {}", tailscale_secret_path);
 
-    let telegram_secret_path = "/secrets/telegram";
+    let telegram_secret_path = Utf8Path::new("/secrets/telegram");
     debug!(
         "Reading Telegram secret from path: {}",
         telegram_secret_path
