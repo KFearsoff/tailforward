@@ -104,8 +104,10 @@ fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), Tai
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::{assert_eq, assert_ne};
     use secrecy::SecretString;
     use std::str::FromStr;
+    use test_case::test_case;
 
     #[test]
     fn post_webhook_good() {
@@ -121,104 +123,32 @@ mod tests {
         assert!(out.is_ok());
     }
 
-    #[test]
-    fn header_good() {
-        let header = "t=foo,v1=bar";
-        let (t, v1) = parse_header(header).unwrap();
-        assert_eq!(t, "foo");
-        assert_eq!(v1, "bar");
-    }
-
-    #[test]
-    fn header_no_comma() {
-        let header = "t=foov1=bar";
+    #[test_case("t=foo,v1=bar" => matches Ok(_); "when correct")]
+    #[test_case("t=foov1=bar" => matches Err(_); "when no comma")]
+    #[test_case("t=foo,,v1=bar" => matches Err(_); "when too many commas")]
+    #[test_case("tfoo,v1=bar" => matches Err(_); "when t is malformed")]
+    #[test_case("t=foo,v1bar" => matches Err(_); "when v1 is malformed")]
+    #[test_case("a=foo,v1=bar" => matches Err(_); "when header is not t")]
+    #[test_case("t=foo,v=bar" => matches Err(_); "when header is not v1")]
+    #[test_case("t=foo,v2=bar" => matches Err(_); "when header is v!=1")]
+    fn is_header_correct(header: &str) -> Result<(&str, &str), TailscaleWebhook> {
         let out = parse_header(header);
-        assert!(out.is_err());
+        out
     }
 
-    #[test]
-    fn header_more_commas() {
-        let header = "t=foo,,v1=bar";
-        let out = parse_header(header);
-        assert!(out.is_err());
-    }
-
-    #[test]
-    fn header_t_malformed() {
-        let header = "tfoo,v1=bar";
-        let out = parse_header(header);
-        assert!(out.is_err());
-    }
-
-    #[test]
-    fn header_v1_malformed() {
-        let header = "t=foo,v1bar";
-        let out = parse_header(header);
-        assert!(out.is_err());
-    }
-
-    #[test]
-    fn header_not_t() {
-        let header = "a=foo,v1=bar";
-        let out = parse_header(header);
-        assert!(out.is_err());
-    }
-
-    #[test]
-    fn header_not_v1() {
-        let header = "t=foo,v=bar";
-        let out = parse_header(header);
-        assert!(out.is_err());
-    }
-
-    #[test]
-    fn timestamp_good() {
+    #[test_case(0 => matches Ok(_); "when equal")]
+    #[test_case(-1 => matches Err(_); "when newer")]
+    #[test_case(299 => matches Ok(_); "when old lt")]
+    #[test_case(300 => matches Ok(_); "when old eq")]
+    #[test_case(301 => matches Err(_); "when old gt")]
+    fn timestamp_correct(correction: i64) -> Result<DateTime<Utc>, TailscaleWebhook> {
         let timestamp_input: i64 = 1684518293;
         let timestamp = timestamp_input.to_string();
-        let now = chrono::Utc.timestamp_opt(timestamp_input, 0).unwrap();
+        let now = chrono::Utc
+            .timestamp_opt(timestamp_input + correction, 0)
+            .unwrap();
         let out = compare_timestamp(&timestamp, now);
-
-        assert!(out.is_ok());
-    }
-
-    #[test]
-    fn timestamp_newer() {
-        let timestamp_input: i64 = 1684518293;
-        let timestamp = timestamp_input.to_string();
-        let now = chrono::Utc.timestamp_opt(timestamp_input - 1, 0).unwrap();
-        let out = compare_timestamp(&timestamp, now);
-
-        assert!(out.is_err());
-    }
-
-    #[test]
-    fn timestamp_older_good() {
-        let timestamp_input: i64 = 1684518293;
-        let timestamp = timestamp_input.to_string();
-        let now = chrono::Utc.timestamp_opt(timestamp_input + 299, 0).unwrap();
-        let out = compare_timestamp(&timestamp, now);
-
-        assert!(out.is_ok());
-    }
-
-    #[test]
-    fn timestamp_older_equal() {
-        let timestamp_input: i64 = 1684518293;
-        let timestamp = timestamp_input.to_string();
-        let now = chrono::Utc.timestamp_opt(timestamp_input + 300, 0).unwrap();
-        let out = compare_timestamp(&timestamp, now);
-
-        assert!(out.is_ok());
-    }
-
-    #[test]
-    fn timestamp_older_newer() {
-        let timestamp_input: i64 = 1684518293;
-        let timestamp = timestamp_input.to_string();
-        let now = chrono::Utc.timestamp_opt(timestamp_input + 301, 0).unwrap();
-        let out = compare_timestamp(&timestamp, now);
-
-        assert!(out.is_err());
+        out
     }
 
     #[test]

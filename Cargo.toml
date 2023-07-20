@@ -27,5 +27,9 @@ tap = "1"
 camino = { version = "1", features = ["serde1"] }
 config = "0.13"
 
+[dev-dependencies]
+pretty_assertions = "1"
+test-case = "3"
+
 [profile.dev.package.backtrace]
 opt-level = 3 # Otherwise color-eyre has poor performance
