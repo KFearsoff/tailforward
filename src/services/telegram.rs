@@ -25,9 +25,9 @@ pub async fn post(
     );
 
     for message in text {
-        debug!(message = "{message:?}", "Sending message");
+        debug!(contents = ?message, "Sending message");
         client.post(&url).json(&message).send().await?;
-        info!(message = "{message:?}", "Sent message");
+        info!(contents = ?message, "Sent message");
     }
     Ok(())
 }

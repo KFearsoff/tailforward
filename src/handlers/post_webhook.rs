@@ -22,12 +22,12 @@ pub async fn webhook_handler(
     let header = header_opt
         .to_str()
         .map_err(|err| eyre!("{err}"))?
-        .tap_deref(|val| info!("Got header: {}", val));
+        .tap_deref(|header| info!(header, "Got header"));
     let now = Utc::now();
 
     let ts_secret = state.tailscale_secret;
     let events = post_webhook(header, &body, now, &ts_secret)?;
-    info!(events = "{events:?}", "Got events");
+    info!(?events, "Got events");
 
     let tg_secret = state.telegram_secret;
     let reqwest_client = state.reqwest_client;

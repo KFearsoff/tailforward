@@ -17,9 +17,9 @@ pub struct Settings {
 impl Settings {
     #[tracing::instrument]
     pub fn new() -> Result<Self> {
-        let config_file_path = env::var("TAILFORWARD_CONFIG_FILE").unwrap_or_else(|err| {
+        let config_file_path = env::var("TAILFORWARD_CONFIG_FILE").unwrap_or_else(|error| {
             info!("TAILFORWARD_CONFIG_FILE is not specified, using defaults");
-            debug!("{err:?}");
+            debug!(?error);
             "examples/config.toml".to_string()
         });
 

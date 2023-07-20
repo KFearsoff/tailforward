@@ -3,11 +3,7 @@ use axum::routing::{post, Router};
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
 
-use tailforward::{
-    axumlib,
-    config::{Settings},
-    handlers::post_webhook::webhook_handler,
-};
+use tailforward::{axumlib, config::Settings, handlers::post_webhook::webhook_handler};
 use tap::Tap;
 use tokio::fs::read_to_string;
 use tower_http::trace::TraceLayer;
@@ -21,7 +17,7 @@ use tracing_tree::HierarchicalLayer;
 async fn main() -> Result<()> {
     setup_tracing();
     color_eyre::install()?;
-    let settings = Settings::new()?.tap(|val| debug!("Read settings: {:?}", val));
+    let settings = Settings::new()?.tap(|settings| debug!(?settings, "Read settings"));
     setup_server(&settings).await?;
     Ok(())
 }
@@ -47,29 +43,23 @@ async fn setup_server(settings: &Settings) -> Result<()> {
     let addr = settings.address;
     let chat_id = settings.chat_id;
     let tailscale_secret_path = &settings.tailscale_secret_file;
-    debug!(
-        "Reading Tailscale secret from path: {}",
-        tailscale_secret_path
-    );
+    debug!(?tailscale_secret_path, "Reading Tailscale secret");
     let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)
         .await?
-        .tap_dbg(|val| debug!("Secret value is: {}", val))
+        .tap_dbg(|tailscale_secret| debug!(?tailscale_secret))
         .into();
-    info!("Read Tailscale secret from path: {}", tailscale_secret_path);
+    info!(?tailscale_secret_path, "Read Tailscale secret");
 
     let telegram_secret_path = &settings.telegram_secret_file;
-    debug!(
-        "Reading Telegram secret from path: {}",
-        telegram_secret_path
-    );
+    debug!(?telegram_secret_path, "Reading Telegram secret");
     let telegram_secret: SecretString = read_to_string(telegram_secret_path)
         .await?
         .split('=')
         .collect::<Vec<_>>()[1]
         .to_string()
-        .tap_dbg(|val| debug!("Secret value is: {}", val))
+        .tap_dbg(|telegram_secret| debug!(?telegram_secret))
         .into();
-    info!("Read Telegram secret from path: {}", telegram_secret_path);
+    info!(?telegram_secret_path, "Read Telegram secret");
 
     let reqwest_client = reqwest::Client::new();
     info!("Created reqwest client");

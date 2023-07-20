@@ -37,9 +37,9 @@ pub async fn shutdown_signal() {
 pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
     let status = StatusCode::NOT_FOUND;
     warn!(
-        status = &status.as_str(),
-        uri = uri.to_string(),
-        "Failed to serve"
+        %status,
+        %uri,
+        "Failed to serve",
     );
     (status, format!("No route {uri}"))
 }
