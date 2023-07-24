@@ -1,8 +1,6 @@
 use axum::routing::{post, Router};
-
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
-
 use tailforward::{axumlib, config::Settings, handlers::post_webhook::webhook_handler};
 use tap::Tap;
 use tokio::fs::read_to_string;
@@ -15,16 +13,26 @@ use tracing_tree::HierarchicalLayer;
 #[tokio::main]
 #[tracing::instrument]
 async fn main() -> Result<()> {
-    setup_tracing();
+    setup_tracing()?;
     color_eyre::install()?;
     let settings = Settings::new()?.tap(|settings| debug!(?settings, "Read settings"));
     setup_server(&settings).await?;
+    opentelemetry::global::shutdown_tracer_provider();
     Ok(())
 }
 
-fn setup_tracing() {
+fn setup_tracing() -> Result<()> {
+    // Create env filter
     let env_filter = EnvFilter::try_from_default_env()
         .map_or_else(|_| EnvFilter::new("info"), |env_filter| env_filter);
+
+    // Install a new OpenTelemetry trace pipeline
+    let tracer = opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        .install_batch(opentelemetry::runtime::Tokio)?;
+    let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
     Registry::default()
         .with(env_filter)
         .with(
@@ -33,9 +41,12 @@ fn setup_tracing() {
                 .with_bracketed_fields(true),
         )
         .with(ErrorLayer::default())
+        .with(telemetry_layer)
         .init();
 
     info!("Initialized tracing and logging systems");
+
+    Ok(())
 }
 
 #[tracing::instrument]
