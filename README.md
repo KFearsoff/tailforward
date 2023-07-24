@@ -1,5 +1,7 @@
 # README
 
+This service receives Tailscale webhooks on endpoint `/tailscale_webhook`
+
 Supports all of the Opentelemetry environment variables
 
 If you collect OTLP traces on localhost, use env var:

@@ -84,7 +84,7 @@ async fn setup_server(settings: &Settings) -> Result<()> {
 
     let app = Router::new()
         .fallback(axumlib::fallback)
-        .route("/", post(webhook_handler))
+        .route("/tailscale_webhook", post(webhook_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
