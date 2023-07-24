@@ -24,8 +24,8 @@ impl Settings {
         });
 
         let s = Config::builder()
-            .add_source(Environment::with_prefix("tailforward"))
             .add_source(File::with_name(&config_file_path))
+            .add_source(Environment::with_prefix("tailforward"))
             .build()?;
 
         // You can deserialize (and thus freeze) the entire configuration as
