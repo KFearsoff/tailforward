@@ -1,6 +1,6 @@
 # README
 
-This service receives Tailscale webhooks on endpoint `/tailscale_webhook`
+This service receives Tailscale webhooks on endpoint `/tailscale-webhook`
 
 Supports all of the Opentelemetry environment variables
 
