@@ -1,0 +1,5 @@
+debug: false
+tailscale_secret_file: /secrets/tailscale-webhook
+telegram_secret_file: /secrets/telegram
+address: 0.0.0.0:33010
+chat_id: -1001864190705

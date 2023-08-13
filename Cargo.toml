@@ -40,3 +40,11 @@ test-case = "3"
 
 [profile.dev.package.backtrace]
 opt-level = 3 # Otherwise color-eyre has poor performance
+
+[build-dependencies]
+tailforward-cfg = { path = "tailforward-cfg" }
+serde = "1.0"
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.7"
+camino = { version = "1" }
