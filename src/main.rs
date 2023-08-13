@@ -1,7 +1,7 @@
 use axum::routing::{post, Router};
 use color_eyre::eyre::Result;
 use secrecy::SecretString;
-use tailforward::{axumlib, config::Settings, handlers::post_webhook::webhook_handler};
+use tailforward::{axumlib, config::new_config, handlers::post_webhook::webhook_handler};
 use tap::Tap;
 use tokio::fs::read_to_string;
 use tower_http::trace::TraceLayer;
@@ -15,7 +15,7 @@ use tracing_tree::HierarchicalLayer;
 async fn main() -> Result<()> {
     setup_tracing()?;
     color_eyre::install()?;
-    let settings = Settings::new()?.tap(|settings| debug!(?settings, "Read settings"));
+    let settings = new_config()?.tap(|settings| debug!(?settings, "Read settings"));
     setup_server(&settings).await?;
     opentelemetry::global::shutdown_tracer_provider();
     Ok(())
@@ -50,7 +50,7 @@ fn setup_tracing() -> Result<()> {
 }
 
 #[tracing::instrument]
-async fn setup_server(settings: &Settings) -> Result<()> {
+async fn setup_server(settings: &tailforward_cfg::config::Config) -> Result<()> {
     let addr = settings.address;
     let chat_id = settings.chat_id;
     let tailscale_secret_path = &settings.tailscale_secret_file;

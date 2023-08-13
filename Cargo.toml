@@ -1,3 +1,6 @@
+[workspace]
+members = ["tailforward-cfg"]
+
 [package]
 name = "tailforward"
 version = "0.3.0"
@@ -9,6 +12,7 @@ edition = "2021"
 axum = { version = "0.6", features = ["headers"] }
 chrono = { version = "0.4", features = ["serde"] }
 color-eyre = "0.6"
+tailforward-cfg = { path = "tailforward-cfg" }
 hmac = "0.12"
 secrecy = "0.8"
 serde = { version = "1.0.1", features = ["derive"] }

@@ -15,9 +15,14 @@ subsystem = "rust"
 translator = "cargo-lock"
 
 [tailforward.subsystemInfo]
-workspaceMembers = []
+workspaceMembers = [ "tailforward-cfg",]
 [[tailforward.subsystemInfo.crates]]
 name = "tailforward"
 relPath = ""
+version = "0.3.0"
+
+[[tailforward.subsystemInfo.crates]]
+name = "tailforward-cfg"
+relPath = "tailforward-cfg"
 version = "0.1.0"
 
