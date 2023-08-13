@@ -1,5 +1,7 @@
 use axum::routing::{post, Router};
 use color_eyre::eyre::Result;
+use opentelemetry::KeyValue;
+use opentelemetry_sdk::{trace, Resource};
 use secrecy::SecretString;
 use tailforward::{axumlib, config::new_config, handlers::webhook_handler};
 use tap::Tap;
@@ -30,6 +32,12 @@ fn setup_tracing() -> Result<()> {
     let tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        .with_trace_config(
+            trace::config().with_resource(Resource::new(vec![KeyValue::new(
+                "service.name",
+                "tailforward",
+            )])),
+        )
         .install_batch(opentelemetry::runtime::Tokio)?;
     let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
