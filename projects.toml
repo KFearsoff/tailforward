@@ -13,7 +13,6 @@ name = "tailforward"
 relPath = ""
 subsystem = "rust"
 translator = "cargo-lock"
-translators = [ "cargo-lock", "cargo-toml",]
 
 [tailforward.subsystemInfo]
 workspaceMembers = []
