@@ -2,7 +2,7 @@ use color_eyre::Result;
 use config::{Config, Environment};
 
 #[tracing::instrument]
-pub fn new_config() -> Result<tailforward_cfg::config::Config> {
+pub fn new_config() -> Result<tailforward_cfg::Config> {
     // let config_file_path = env::var("TAILFORWARD_CONFIG_FILE").unwrap_or_else(|error| {
     //     info!("TAILFORWARD_CONFIG_FILE is not specified, using defaults");
     //     debug!(?error);

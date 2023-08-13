@@ -1,6 +1,6 @@
 use camino::Utf8Path;
 use std::{error::Error, fs};
-use tailforward_cfg::config::Config;
+use tailforward_cfg::Config;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cfg = Config::default();
