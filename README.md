@@ -14,5 +14,3 @@ OTEL_EXPORTER_OTLP_ENDPOINT="<grpc_endpoint>"
 Configuration example is provided in examples/config.toml
 To override, use env vars prefixed with TAILFORWARD_:
 TAILFORWARD_DEBUG=1
-
-DEFAULTS ARE NOT SET, YOU HAVE TO SPECIFY EVERYTHING IN ENVIRONMENT VARIABLES MANUALLY!
