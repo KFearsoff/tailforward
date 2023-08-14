@@ -39,6 +39,10 @@
           # https://github.com/cachix/devenv/issues/528
           containers = pkgs.lib.mkForce {};
 
+          packages = with pkgs; [
+            cargo-deny
+          ];
+
           pre-commit.hooks = {
             # Nix
             alejandra.enable = true;
