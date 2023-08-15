@@ -1,4 +1,3 @@
-pub mod axumlib;
 pub mod config;
 
 pub mod handlers {
@@ -22,4 +21,151 @@ pub mod models {
 mod services {
     pub mod post_webhook;
     pub mod telegram;
+}
+
+use axum::http::StatusCode;
+use axum::routing::{post, Router};
+use color_eyre::eyre::Result;
+use handlers::webhook_handler;
+use opentelemetry::KeyValue;
+use opentelemetry_sdk::{trace, Resource};
+use secrecy::SecretString;
+use tap::Tap;
+use tokio::fs::read_to_string;
+use tokio::signal;
+use tower_http::trace::TraceLayer;
+use tracing::{debug, info, warn};
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+use tracing_tree::HierarchicalLayer;
+
+#[tracing::instrument]
+#[allow(clippy::expect_used, clippy::redundant_pub_crate)]
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl-C handler");
+        info!("Ctrl-C received");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("Failed to install signal handler")
+            .recv()
+            .await;
+        info!("Signal is received");
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    info!("Starting graceful shutdown");
+}
+
+#[tracing::instrument]
+async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
+    let status = StatusCode::NOT_FOUND;
+    warn!(
+        %status,
+        %uri,
+        "Failed to serve",
+    );
+    (status, format!("No route {uri}"))
+}
+
+#[derive(Clone, Debug)]
+pub struct State {
+    pub tailscale_secret: SecretString,
+    pub telegram_secret: SecretString,
+    pub reqwest_client: reqwest::Client,
+    pub chat_id: i64,
+}
+
+#[allow(clippy::missing_errors_doc)]
+pub fn setup_tracing() -> Result<()> {
+    // Create env filter
+    let env_filter = EnvFilter::try_from_default_env()
+        .map_or_else(|_| EnvFilter::new("info"), |env_filter| env_filter);
+
+    // Install a new OpenTelemetry trace pipeline
+    let tracer = opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        .with_trace_config(
+            trace::config().with_resource(Resource::new(vec![KeyValue::new(
+                "service.name",
+                "tailforward",
+            )])),
+        )
+        .install_batch(opentelemetry::runtime::Tokio)?;
+    let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    Registry::default()
+        .with(env_filter)
+        .with(
+            HierarchicalLayer::new(2)
+                .with_targets(true)
+                .with_bracketed_fields(true),
+        )
+        .with(ErrorLayer::default())
+        .with(telemetry_layer)
+        .init();
+
+    info!("Initialized tracing and logging systems");
+
+    Ok(())
+}
+
+#[tracing::instrument]
+pub async fn setup_server(settings: &tailforward_cfg::Config) -> Result<()> {
+    let addr = settings.address;
+    let chat_id = settings.chat_id;
+    let tailscale_secret_path = &settings.tailscale_secret_file;
+    debug!(?tailscale_secret_path, "Reading Tailscale secret");
+    let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)
+        .await?
+        .tap_dbg(|tailscale_secret| debug!(?tailscale_secret))
+        .into();
+    info!(?tailscale_secret_path, "Read Tailscale secret");
+
+    let telegram_secret_path = &settings.telegram_secret_file;
+    debug!(?telegram_secret_path, "Reading Telegram secret");
+    let telegram_secret: SecretString = read_to_string(telegram_secret_path)
+        .await?
+        .split('=')
+        .collect::<Vec<_>>()[1]
+        .to_string()
+        .tap_dbg(|telegram_secret| debug!(?telegram_secret))
+        .into();
+    info!(?telegram_secret_path, "Read Telegram secret");
+
+    let reqwest_client = reqwest::Client::new();
+    info!("Created reqwest client");
+
+    let state = State {
+        tailscale_secret,
+        telegram_secret,
+        reqwest_client,
+        chat_id,
+    };
+
+    let app = Router::new()
+        .fallback(fallback)
+        .route("/tailscale-webhook", post(webhook_handler))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    Ok(())
 }
