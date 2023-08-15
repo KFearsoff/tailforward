@@ -32,8 +32,8 @@ use handlers::{ping_handler, webhook_handler};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::{trace, Resource};
 use secrecy::SecretString;
+use std::fs::read_to_string;
 use tap::Tap;
-use tokio::fs::read_to_string;
 use tokio::signal;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, info, warn};
@@ -126,20 +126,18 @@ pub fn setup_tracing() -> Result<()> {
 }
 
 #[tracing::instrument]
-pub async fn setup_app(settings: &tailforward_cfg::Config) -> Result<Router> {
+pub fn setup_app(settings: &tailforward_cfg::Config) -> Result<Router> {
     let chat_id = settings.chat_id;
     let tailscale_secret_path = &settings.tailscale_secret_file;
     debug!(?tailscale_secret_path, "Reading Tailscale secret");
-    let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)
-        .await?
+    let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)?
         .tap_dbg(|tailscale_secret| debug!(?tailscale_secret))
         .into();
     info!(?tailscale_secret_path, "Read Tailscale secret");
 
     let telegram_secret_path = &settings.telegram_secret_file;
     debug!(?telegram_secret_path, "Reading Telegram secret");
-    let telegram_secret: SecretString = read_to_string(telegram_secret_path)
-        .await?
+    let telegram_secret: SecretString = read_to_string(telegram_secret_path)?
         .split('=')
         .collect::<Vec<_>>()[1]
         .to_string()
