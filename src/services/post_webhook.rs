@@ -104,7 +104,7 @@ fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), Tai
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_ne;
     use secrecy::SecretString;
     use std::str::FromStr;
     use test_case::test_case;

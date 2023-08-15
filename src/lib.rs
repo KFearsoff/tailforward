@@ -3,6 +3,8 @@ pub mod config;
 pub mod handlers {
     mod post_webhook;
     pub use post_webhook::webhook_handler;
+    mod ping;
+    pub use ping::ping_handler;
 }
 
 pub mod models {
@@ -24,9 +26,9 @@ mod services {
 }
 
 use axum::http::StatusCode;
-use axum::routing::{post, Router};
+use axum::routing::{get, post, Router};
 use color_eyre::eyre::Result;
-use handlers::webhook_handler;
+use handlers::{ping_handler, webhook_handler};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::{trace, Resource};
 use secrecy::SecretString;
@@ -41,7 +43,7 @@ use tracing_tree::HierarchicalLayer;
 
 #[tracing::instrument]
 #[allow(clippy::expect_used, clippy::redundant_pub_crate)]
-async fn shutdown_signal() {
+pub async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -124,8 +126,7 @@ pub fn setup_tracing() -> Result<()> {
 }
 
 #[tracing::instrument]
-pub async fn setup_server(settings: &tailforward_cfg::Config) -> Result<()> {
-    let addr = settings.address;
+pub async fn setup_app(settings: &tailforward_cfg::Config) -> Result<Router> {
     let chat_id = settings.chat_id;
     let tailscale_secret_path = &settings.tailscale_secret_file;
     debug!(?tailscale_secret_path, "Reading Tailscale secret");
@@ -156,16 +157,10 @@ pub async fn setup_server(settings: &tailforward_cfg::Config) -> Result<()> {
         chat_id,
     };
 
-    let app = Router::new()
+    Ok(Router::new()
         .fallback(fallback)
         .route("/tailscale-webhook", post(webhook_handler))
+        .route("/ping", get(ping_handler))
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
-
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
-
-    Ok(())
+        .with_state(state))
 }
