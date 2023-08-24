@@ -15,8 +15,8 @@ color-eyre = "0.6"
 tailforward-cfg = { path = "tailforward-cfg" }
 hmac = "0.12"
 secrecy = "0.8"
-serde = { version = "=1.0.171", features = ["derive"] }
-serde_derive = "=1.0.171"
+serde = { version = "1", features = ["derive"] }
+serde_derive = "1"
 serde_json = "1"
 sha2 = "0.10"
 thiserror = "1"
