@@ -39,4 +39,9 @@ pub enum TailscaleWebhook {
         #[from]
         source: Error,
     },
+    #[error("error sending request")]
+    ReqwestError {
+        #[from]
+        source: reqwest::Error,
+    },
 }

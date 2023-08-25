@@ -1,12 +1,8 @@
 use crate::models::{event::Event, message::Message};
-
 use color_eyre::Report;
 use secrecy::{ExposeSecret, SecretString};
 use tracing::{debug, info};
 
-/// # Errors
-///
-/// `reqwest::Error`
 pub async fn post(
     events: Vec<Event>,
     client: reqwest::Client,

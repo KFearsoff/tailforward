@@ -82,7 +82,6 @@ fn compare_timestamp(
 }
 
 #[tracing::instrument]
-#[allow(clippy::unwrap_used)]
 fn verify_sig(sig: &str, content: &str, secret: &SecretString) -> Result<(), TailscaleWebhook> {
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
