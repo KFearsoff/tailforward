@@ -29,13 +29,13 @@ pub async fn webhook_handler(
 
     let now = Utc::now();
 
-    let ts_secret = state.tailscale_secret;
+    let ts_secret = state.settings.tailscale_secret;
     let events = post_webhook(header_val, &body, now, &ts_secret)?;
     info!(?events, "Got events");
 
-    let tg_secret = state.telegram_secret;
+    let tg_secret = state.settings.telegram_secret;
     let reqwest_client = state.reqwest_client;
-    let chat_id = state.chat_id;
+    let chat_id = state.settings.base.chat_id;
     post(events, reqwest_client, tg_secret, chat_id).await?;
     Ok(())
 }

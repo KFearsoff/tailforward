@@ -25,18 +25,16 @@ mod services {
     pub mod telegram;
 }
 
+use crate::config::Application;
 use axum::http::StatusCode;
 use axum::routing::{get, post, Router};
 use color_eyre::eyre::Result;
 use handlers::{ping_handler, webhook_handler};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::{trace, Resource};
-use secrecy::SecretString;
-use std::fs::read_to_string;
-use tap::Tap;
 use tokio::signal;
 use tower_http::trace::TraceLayer;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
@@ -84,10 +82,8 @@ async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
 
 #[derive(Clone, Debug)]
 pub struct State {
-    pub tailscale_secret: SecretString,
-    pub telegram_secret: SecretString,
+    pub settings: Application,
     pub reqwest_client: reqwest::Client,
-    pub chat_id: i64,
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -126,33 +122,13 @@ pub fn setup_tracing() -> Result<()> {
 }
 
 #[tracing::instrument]
-pub fn setup_app(settings: &tailforward_cfg::Config) -> Result<Router> {
-    let chat_id = settings.chat_id;
-    let tailscale_secret_path = &settings.tailscale_secret_file;
-    debug!(?tailscale_secret_path, "Reading Tailscale secret");
-    let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)?
-        .tap_dbg(|tailscale_secret| debug!(?tailscale_secret))
-        .into();
-    info!(?tailscale_secret_path, "Read Tailscale secret");
-
-    let telegram_secret_path = &settings.telegram_secret_file;
-    debug!(?telegram_secret_path, "Reading Telegram secret");
-    let telegram_secret: SecretString = read_to_string(telegram_secret_path)?
-        .split('=')
-        .collect::<Vec<_>>()[1]
-        .to_string()
-        .tap_dbg(|telegram_secret| debug!(?telegram_secret))
-        .into();
-    info!(?telegram_secret_path, "Read Telegram secret");
-
+pub fn setup_app(settings: Application) -> Result<Router> {
     let reqwest_client = reqwest::Client::new();
     info!("Created reqwest client");
 
     let state = State {
-        tailscale_secret,
-        telegram_secret,
+        settings,
         reqwest_client,
-        chat_id,
     };
 
     Ok(Router::new()

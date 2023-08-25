@@ -3,7 +3,7 @@ use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub debug: bool,
