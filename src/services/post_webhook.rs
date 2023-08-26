@@ -110,15 +110,26 @@ mod tests {
 
     #[test]
     fn post_webhook_good() {
-        let body = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
-        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
-        let timestamp_input: i64 = 1684518293;
-        let datetime = chrono::Utc.timestamp_opt(timestamp_input, 0).unwrap();
-        let secret = SecretString::from_str("123").unwrap();
-        let header = format!("t={},v1={}", timestamp_input, v1_val);
+        let timestamp = Utc::now();
+        let secret_str = "123";
+        let secret = SecretString::from_str(secret_str).unwrap();
 
-        let out = post_webhook(&header, body, datetime, &secret);
+        let body_json = vec![Event {
+            timestamp,
+            version: 1,
+            r#type: "test".to_owned(),
+            tailnet: "example.com".to_owned(),
+            message: "This is a test event".to_owned(),
+            data: None,
+        }];
+        let body_str = serde_json::to_string(&body_json).unwrap();
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret_str.as_bytes()).unwrap();
+        let input = format!("{}.{}", timestamp.timestamp(), body_str);
+        mac.update(&input.as_bytes());
+        let v1_val = hex::encode(mac.finalize().into_bytes());
+        let header = format!("t={},v1={}", timestamp.timestamp(), v1_val);
+
+        let out = post_webhook(&header, &body_str, timestamp, &secret);
         assert!(out.is_ok());
     }
 
@@ -150,14 +161,33 @@ mod tests {
         out
     }
 
+    fn arrange_sig() -> (String, String, SecretString) {
+        let timestamp = Utc::now();
+        let secret_str = "123";
+        let secret = SecretString::from_str(secret_str).unwrap();
+
+        let body_json = vec![Event {
+            timestamp,
+            version: 1,
+            r#type: "test".to_owned(),
+            tailnet: "example.com".to_owned(),
+            message: "This is a test event".to_owned(),
+            data: None,
+        }];
+        let body_str = serde_json::to_string(&body_json).unwrap();
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret_str.as_bytes()).unwrap();
+        let input = format!("{}.{}", timestamp.timestamp(), body_str);
+        mac.update(&input.as_bytes());
+        let v1_val = hex::encode(mac.finalize().into_bytes());
+
+        return (v1_val, input, secret);
+    }
+
     #[test]
     fn sig_verify_good() {
-        let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
-        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val = "42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb";
-        let secret = SecretString::from_str("123").unwrap();
-        let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, &secret);
+        let (v1_val, input, secret) = arrange_sig();
+
+        let out = verify_sig(&v1_val, &input, &secret);
 
         assert!(out.is_ok());
     }

@@ -4,10 +4,11 @@ use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Event {
-    timestamp: DateTime<Utc>,
-    version: u8,
-    r#type: String,
-    tailnet: String,
-    message: String,
-    data: Option<Value>,
+    pub timestamp: DateTime<Utc>,
+    pub version: u8,
+    pub r#type: String,
+    pub tailnet: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
 }
