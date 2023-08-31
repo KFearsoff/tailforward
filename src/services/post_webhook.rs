@@ -92,18 +92,18 @@ fn compare_timestamp(
 
 #[tracing::instrument]
 fn verify_sig(
-    sig: Vec<u8>,
-    content: &str,
+    sig_to_check: Vec<u8>,
+    string_to_sign: &str,
     mut mac: CoreWrapper<HmacCore<Sha256>>,
 ) -> Result<(), MacError> {
     // Axum extracts body as String with backslashes to escape double quotes.
     // The body is signed without those backslashes, so we trim them if they exist.
-    debug!(input_length = content.len());
-    let stripped: &str = &content
+    debug!(input_length = string_to_sign.len());
+    let stripped: &str = &string_to_sign
         .replace('\\', "")
         .tap(|str| debug!(stripped_length = str.len()));
     mac.update(stripped.as_bytes());
-    mac.verify_slice(&sig)?;
+    mac.verify_slice(&sig_to_check)?;
     Ok(())
 }
 
@@ -111,7 +111,6 @@ fn verify_sig(
 mod tests {
     use super::*;
     use hmac::{digest::core_api::CoreWrapper, HmacCore};
-    use pretty_assertions::assert_ne;
     use secrecy::SecretString;
     use std::str::FromStr;
     use test_case::test_case;
@@ -169,114 +168,102 @@ mod tests {
         out
     }
 
-    fn arrange_sig() -> (Vec<u8>, String, CoreWrapper<HmacCore<Sha256>>) {
+    fn arrange_basics(secret: &str) -> (DateTime<Utc>, CoreWrapper<HmacCore<Sha256>>) {
         let timestamp = Utc::now();
-        let secret_str = "123";
-        let hmac = Hmac::<Sha256>::new_from_slice(secret_str.as_bytes()).unwrap();
+        let hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        (timestamp, hmac)
+    }
 
-        let body_json = vec![Event {
+    fn arrange_sig_to_check(secret: &str, input: &str) -> Vec<u8> {
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(&input.as_bytes());
+        let out = mac.finalize().into_bytes().to_vec();
+        out
+    }
+
+    fn arrange_body(timestamp: DateTime<Utc>) -> Vec<Event> {
+        vec![Event {
             timestamp,
             version: 1,
             r#type: "test".to_owned(),
             tailnet: "example.com".to_owned(),
             message: "This is a test event".to_owned(),
             data: None,
-        }];
-        let body_str = serde_json::to_string(&body_json).unwrap();
+        }]
+    }
 
-        let mut mac = Hmac::<Sha256>::new_from_slice(secret_str.as_bytes()).unwrap();
-        let input = format!("{}.{}", timestamp.timestamp(), body_str);
-        mac.update(&input.as_bytes());
-        let v1_val = mac.finalize().into_bytes().to_vec();
-
-        return (v1_val, input, hmac);
+    fn arrange_string_to_sign(timestamp: DateTime<Utc>, body: Vec<Event>) -> String {
+        let body_str = serde_json::to_string(&body).unwrap();
+        format!("{}.{}", timestamp.timestamp(), body_str)
     }
 
     #[test]
-    fn sig_verify_good() {
-        let (v1_val, input, secret) = arrange_sig();
+    fn verify_sig_passes() {
+        let secret = "123";
+        let (timestamp, mac) = arrange_basics(secret);
 
-        let out = verify_sig(v1_val, &input, secret);
+        let body_json = arrange_body(timestamp);
+        let string_to_sign = arrange_string_to_sign(timestamp, body_json);
+        let sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
 
+        let out = verify_sig(sig_to_check, &string_to_sign, mac);
         assert!(out.is_ok());
     }
 
     #[test]
-    fn sig_verify_backslashes_good() {
-        let json_str = r#"[{\"timestamp\":\"2023-05-17T11:13:07.62352885Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#;
-        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val =
-            hex::decode("42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb")
-                .unwrap();
-        let secret_str = "123";
-        let hmac = Mac::new_from_slice(secret_str.as_bytes()).unwrap();
-        let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, hmac);
+    fn verify_sig_with_backslashes_passes() {
+        let secret = "123";
+        let (timestamp, mac) = arrange_basics(secret);
 
+        let body_json = arrange_body(timestamp);
+        let input = arrange_string_to_sign(timestamp, body_json);
+        let sig_to_check = arrange_sig_to_check(secret, &input);
+
+        let string_to_sign = input.escape_debug().to_string();
+        let out = verify_sig(sig_to_check, &string_to_sign, mac);
         assert!(out.is_ok());
     }
 
     #[test]
-    fn trim_backslashes() {
-        let input = r#"[{\"timestamp\":\"2023-05-19T17:15:05.137256149Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#;
-        let output = input.replace('\\', "");
-        let condition = output.contains('\\');
+    fn verify_sig_wrong_mac_fails() {
+        let secret = "123";
+        let (timestamp, _) = arrange_basics(secret);
 
-        assert!(!condition);
-    }
+        let body_json = arrange_body(timestamp);
+        let string_to_sign = arrange_string_to_sign(timestamp, body_json);
+        let sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
 
-    #[test]
-    fn trim_backslashes_len() {
-        let input = r#"[{\"timestamp\":\"2023-05-19T17:15:05.137256149Z\",\"version\":1,\"type\":\"test\",\"tailnet\":\"kfearsoff@gmail.com\",\"message\":\"This is a test event\"}]"#;
-        let input_len = input.len();
-        let output = input.replace('\\', "");
-        let output_len = output.len();
-
-        assert_ne!(input_len, output_len);
-    }
-
-    #[test]
-    fn sig_verify_wrong_secret() {
-        let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
-        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val =
-            hex::decode("42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb")
-                .unwrap();
-        let secret_str = "1234";
-        let hmac = Mac::new_from_slice(secret_str.as_bytes()).unwrap();
-        let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, hmac);
-
+        let (_, mac) = arrange_basics(&format!("{secret}4"));
+        let out = verify_sig(sig_to_check, &string_to_sign, mac);
         assert!(out.is_err());
     }
 
     #[test]
-    fn sig_verify_wrong_input() {
-        let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"TEST","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
-        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val =
-            hex::decode("42c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb")
-                .unwrap();
-        let secret_str = "123";
-        let hmac = Mac::new_from_slice(secret_str.as_bytes()).unwrap();
-        let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, hmac);
+    fn verify_sig_wrong_string_to_sign_fails() {
+        let secret = "123";
+        let (timestamp, hmac) = arrange_basics(secret);
 
+        let body_json = arrange_body(timestamp);
+        let string_to_sign = arrange_string_to_sign(timestamp, body_json);
+        let sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
+
+        let string_to_sign = format!("{string_to_sign}TEST");
+        let out = verify_sig(sig_to_check, &string_to_sign, hmac);
         assert!(out.is_err());
     }
 
     #[test]
-    fn sig_verify_wrong_sig() {
-        let json_str = r#"[{"timestamp":"2023-05-17T11:13:07.62352885Z","version":1,"type":"test","tailnet":"kfearsoff@gmail.com","message":"This is a test event"}]"#;
-        // Generated with key "123" on https://www.freeformatter.com/hmac-generator.html
-        let v1_val =
-            hex::decode("52c43ae89c3bbdc8e9c3a64ec9c2bf489159ef59a000aacaf9b880c5b617c9bb")
-                .unwrap();
-        let secret_str = "123";
-        let hmac = Mac::new_from_slice(secret_str.as_bytes()).unwrap();
-        let input = format!("{}.{}", "1684518293", json_str);
-        let out = verify_sig(v1_val, &input, hmac);
+    fn verify_sig_wrong_sig_to_check_fails() {
+        let secret = "123";
+        let (timestamp, mac) = arrange_basics(secret);
 
+        let body_json = arrange_body(timestamp);
+        let string_to_sign = arrange_string_to_sign(timestamp, body_json);
+        let _sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
+
+        let input_broken = format!("{string_to_sign}TEST");
+        let sig_to_check = arrange_sig_to_check(secret, &input_broken);
+        let out = verify_sig(sig_to_check, &string_to_sign, mac);
         assert!(out.is_err());
     }
 }
