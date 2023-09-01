@@ -96,13 +96,7 @@ fn verify_sig(
     string_to_sign: &str,
     mut mac: CoreWrapper<HmacCore<Sha256>>,
 ) -> Result<(), MacError> {
-    // Axum extracts body as String with backslashes to escape double quotes.
-    // The body is signed without those backslashes, so we trim them if they exist.
-    debug!(input_length = string_to_sign.len());
-    let stripped: &str = &string_to_sign
-        .replace('\\', "")
-        .tap(|str| debug!(stripped_length = str.len()));
-    mac.update(stripped.as_bytes());
+    mac.update(string_to_sign.as_bytes());
     mac.verify_slice(&sig_to_check)?;
     Ok(())
 }
@@ -211,22 +205,8 @@ mod tests {
         assert!(out.is_ok());
     }
 
-    #[test]
-    fn verify_sig_with_backslashes_passes() {
-        let secret = "123";
-        let (timestamp, mac) = arrange_basics(secret);
-
-        let body_json = arrange_body(timestamp);
-        let input = arrange_string_to_sign(timestamp, body_json);
-        let sig_to_check = arrange_sig_to_check(secret, &input);
-
-        let string_to_sign = input.escape_debug().to_string();
-        let out = verify_sig(sig_to_check, &string_to_sign, mac);
-        assert!(out.is_ok());
-    }
-
     #[proptest]
-    fn verify_sig_wrong_mac_fails(#[strategy(r"\\X")] x: String) {
+    fn verify_sig_wrong_mac_fails(#[strategy(r"[^\x00]")] x: String) {
         let secret = "123";
         let (timestamp, _) = arrange_basics(secret);
 
@@ -240,7 +220,7 @@ mod tests {
     }
 
     #[proptest]
-    fn verify_sig_wrong_string_to_sign_fails(#[strategy(r"[^\\X]")] x: String) {
+    fn verify_sig_wrong_string_to_sign_fails(#[strategy(r".")] x: String) {
         let secret = "123";
         let (timestamp, hmac) = arrange_basics(secret);
 
@@ -254,7 +234,7 @@ mod tests {
     }
 
     #[proptest]
-    fn verify_sig_wrong_sig_to_check_fails(#[strategy(r"\\X")] x: String) {
+    fn verify_sig_wrong_sig_to_check_fails(#[strategy(r".")] x: String) {
         let secret = "123";
         let (timestamp, mac) = arrange_basics(secret);
 

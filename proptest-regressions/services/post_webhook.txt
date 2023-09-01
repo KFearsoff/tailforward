@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc e99596fdc7b60218897229a0f4cc5f2df3ba09efec50ead8f78ad73d315f0daf # shrinks to input = _VerifySigWrongStringToSignFailsArgs { x: "\\" }
+cc fee144cd0a26d978dc81136dcda75cc134ae96bd459be58f95b4fb8ff0fbd77e # shrinks to input = _VerifySigWrongMacFailsArgs { x: "\0" }
