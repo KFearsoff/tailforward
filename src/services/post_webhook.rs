@@ -114,6 +114,7 @@ mod tests {
     use secrecy::SecretString;
     use std::str::FromStr;
     use test_case::test_case;
+    use test_strategy::proptest;
 
     #[test]
     fn post_webhook_good() {
@@ -224,8 +225,8 @@ mod tests {
         assert!(out.is_ok());
     }
 
-    #[test]
-    fn verify_sig_wrong_mac_fails() {
+    #[proptest]
+    fn verify_sig_wrong_mac_fails(#[strategy(r"\\X")] x: String) {
         let secret = "123";
         let (timestamp, _) = arrange_basics(secret);
 
@@ -233,13 +234,13 @@ mod tests {
         let string_to_sign = arrange_string_to_sign(timestamp, body_json);
         let sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
 
-        let (_, mac) = arrange_basics(&format!("{secret}4"));
+        let (_, mac) = arrange_basics(&format!("{secret}{x}"));
         let out = verify_sig(sig_to_check, &string_to_sign, mac);
         assert!(out.is_err());
     }
 
-    #[test]
-    fn verify_sig_wrong_string_to_sign_fails() {
+    #[proptest]
+    fn verify_sig_wrong_string_to_sign_fails(#[strategy(r"[^\\X]")] x: String) {
         let secret = "123";
         let (timestamp, hmac) = arrange_basics(secret);
 
@@ -247,13 +248,13 @@ mod tests {
         let string_to_sign = arrange_string_to_sign(timestamp, body_json);
         let sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
 
-        let string_to_sign = format!("{string_to_sign}TEST");
+        let string_to_sign = format!("{string_to_sign}{x}");
         let out = verify_sig(sig_to_check, &string_to_sign, hmac);
         assert!(out.is_err());
     }
 
-    #[test]
-    fn verify_sig_wrong_sig_to_check_fails() {
+    #[proptest]
+    fn verify_sig_wrong_sig_to_check_fails(#[strategy(r"\\X")] x: String) {
         let secret = "123";
         let (timestamp, mac) = arrange_basics(secret);
 
@@ -261,7 +262,7 @@ mod tests {
         let string_to_sign = arrange_string_to_sign(timestamp, body_json);
         let _sig_to_check = arrange_sig_to_check(secret, &string_to_sign);
 
-        let input_broken = format!("{string_to_sign}TEST");
+        let input_broken = format!("{string_to_sign}{x}");
         let sig_to_check = arrange_sig_to_check(secret, &input_broken);
         let out = verify_sig(sig_to_check, &string_to_sign, mac);
         assert!(out.is_err());
