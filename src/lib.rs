@@ -18,6 +18,9 @@ pub mod models {
     pub use message::Message;
 
     pub mod report;
+
+    pub mod tailscale_header;
+    pub use tailscale_header::Header;
 }
 
 mod services {

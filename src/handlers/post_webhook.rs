@@ -1,11 +1,11 @@
 use crate::models::report::Result;
+use crate::models::Header;
 use crate::services::post_webhook::post_webhook;
 use crate::services::telegram::post;
 use crate::State as MyState;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
-use chrono::Utc;
 use color_eyre::eyre::eyre;
 use tap::Tap;
 use tracing::info;
@@ -19,18 +19,17 @@ pub async fn webhook_handler(
 ) -> Result<impl IntoResponse> {
     let header_name = "Tailscale-Webhook-Signature";
 
-    let header_opt = headers
+    let header: Header = headers
         .get(header_name)
-        .ok_or_else(|| eyre!("No header {header_name} received, the request is not coming from Tailscale or the format has changed"))?;
-    let header_val = header_opt
+        .ok_or_else(|| eyre!("No header {header_name} received, the request is not coming from Tailscale or the format has changed"))?
         .to_str()
         .map_err(|err| eyre!("Header {header_name} contains non-ASCII characters, Tailscale sends ASCII only: {err}"))?
-        .tap_deref(|header_val| info!(header_val, "Received header {header_name}"));
-
-    let now = Utc::now();
+        .tap_deref(|header_val| info!(header_val, "Received header {header_name}"))
+        .parse()
+        .map_err(|err| eyre!("{err}"))?;
 
     let ts_secret = state.settings.tailscale_secret;
-    let events = post_webhook(header_val, &body, now, &ts_secret)?;
+    let events = post_webhook(header, &body, &ts_secret)?;
     info!(?events, "Got events");
 
     let tg_secret = state.settings.telegram_secret;
