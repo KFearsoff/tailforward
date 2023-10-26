@@ -2,13 +2,22 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     systems.url = "github:nix-systems/default";
-    devenv.url = "github:cachix/devenv";
     flake-parts.url = "github:hercules-ci/flake-parts";
 
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    devenv = {
+      url = "github:cachix/devenv";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     dream2nix = {
       url = "github:nix-community/dream2nix/legacy";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-parts.follows = "flake-parts";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-parts.follows = "flake-parts";
+      };
     };
   };
 
@@ -31,10 +40,12 @@
       perSystem = {
         config,
         pkgs,
+        inputs',
         ...
       }: {
         devenv.shells.default = {
           languages.rust.enable = true;
+          languages.rust.version = "latest";
 
           # https://github.com/cachix/devenv/issues/528
           containers = pkgs.lib.mkForce {};
@@ -61,9 +72,17 @@
           };
         };
 
-        dream2nix.inputs."tailforward" = {
+        dream2nix.inputs."tailforward" = let
+          # we use the full toolchain derivation here as using
+          # only the cargo / rustc derivation *does not* work.
+          inherit (inputs'.fenix.packages.minimal) toolchain;
+        in {
           source = ./.;
           projects = builtins.fromTOML (builtins.readFile ./projects.toml);
+          packageOverrides = {
+            # for crane builder
+            "^.*".set-toolchain.overrideRustToolchain = _: {cargo = toolchain;};
+          };
         };
 
         inherit (config.dream2nix.outputs."tailforward") packages;
