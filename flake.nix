@@ -41,6 +41,7 @@
 
           packages = with pkgs; [
             cargo-deny
+            cargo-edit
           ];
 
           pre-commit.hooks = {
