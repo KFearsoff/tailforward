@@ -53,6 +53,7 @@
           packages = with pkgs; [
             cargo-deny
             cargo-edit
+            cargo-nextest
           ];
 
           pre-commit.hooks = {
