@@ -26,7 +26,7 @@ pub async fn webhook_handler(
         .map_err(|err| eyre!("Header {header_name} contains non-ASCII characters, Tailscale sends ASCII only: {err}"))?
         .tap_deref(|header_val| info!(header_val, "Received header {header_name}"))
         .parse()
-        .map_err(|err| eyre!("{err}"))?;
+        .map_err(|err| eyre!("Header {header_name} is invalid: {err}"))?;
 
     let ts_secret = state.settings.tailscale_secret;
     let events = post_webhook(header, &body, &ts_secret)?;
