@@ -1,38 +1,62 @@
-use color_eyre::Result;
-use config::{Config, Environment};
+use color_eyre::{eyre::eyre, Result};
+use config::{Config, File, FileFormat};
 use secrecy::SecretString;
-use std::fs::read_to_string;
-use tap::Tap;
+use std::{env, fs::read_to_string};
+use tap::{Pipe, Tap};
 use tracing::{debug, info};
 
 #[tracing::instrument]
 pub fn new_config() -> Result<Application> {
-    // let config_file_path = env::var("TAILFORWARD_CONFIG_FILE").unwrap_or_else(|error| {
-    //     info!("TAILFORWARD_CONFIG_FILE is not specified, using defaults");
-    //     debug!(?error);
-    //     "examples/config.toml".to_string()
-    // });
+    let config_dir_path = env::var("CONFIGURATION_DIRECTORY").unwrap_or_else(|error| {
+        info!("CONFIGURATION_DIRECTORY is not specified, using defaults");
+        debug!(?error);
+        "/etc/tailforward".to_string()
+    });
+    let config_file_path = config_dir_path + "/tailforward";
 
     let s = Config::builder()
-        // .add_source(File::with_name(&config_file_path))
-        .add_source(Environment::with_prefix("tailforward"))
+        .add_source(File::new(&config_file_path, FileFormat::Toml))
         .build()?;
 
     // You can deserialize (and thus freeze) the entire configuration as
     let base: tailforward_cfg::Config = s.try_deserialize()?;
 
-    let tailscale_secret_path = &base.tailscale_secret_file;
+    if base.telegram.chat_id.is_none() {
+        return Err(eyre!("Chat id is not specified"));
+    };
+
+    let tailscale_secret_path = &base
+        .tailscale
+        .secret_file
+        .as_ref()
+        .ok_or(eyre!("Must specify path for Tailscale secret"))?;
     debug!(?tailscale_secret_path, "Reading Tailscale secret");
     let tailscale_secret: SecretString = read_to_string(tailscale_secret_path)?
+        .trim()
+        .to_owned()
         .tap_dbg(|tailscale_secret| debug!(?tailscale_secret))
         .into();
     info!(?tailscale_secret_path, "Read Tailscale secret");
 
-    let telegram_secret_path = &base.telegram_secret_file;
+    let telegram_secret_path = &base
+        .telegram
+        .secret_file
+        .as_ref()
+        .ok_or(eyre!("Must specify path for Telegram secret"))?;
     debug!(?telegram_secret_path, "Reading Telegram secret");
     let telegram_secret: SecretString = read_to_string(telegram_secret_path)?
-        .split('=')
-        .collect::<Vec<_>>()[1]
+        .trim()
+        .to_owned()
+        .pipe_as_mut(|str| match &base.telegram.file_format {
+            tailforward_cfg::config::Format::Alertmanager => {
+                debug!("alertmanager match");
+                str.split('=').collect::<Vec<_>>()[1]
+            }
+            tailforward_cfg::config::Format::Plain => {
+                debug!("plain match");
+                str
+            }
+        })
         .to_string()
         .tap_dbg(|telegram_secret| debug!(?telegram_secret))
         .into();
@@ -50,9 +74,7 @@ pub fn new_config_with_secrets(
     tailscale_secret: SecretString,
     telegram_secret: SecretString,
 ) -> Result<Application> {
-    let s = Config::builder()
-        .add_source(Environment::with_prefix("tailforward"))
-        .build()?;
+    let s = Config::builder().build()?;
 
     let base = s.try_deserialize()?;
     Ok(Application {

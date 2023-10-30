@@ -13,7 +13,6 @@ use tracing::info;
 #[tracing::instrument]
 pub async fn webhook_handler(
     State(state): State<MyState>,
-    // TODO: use typed header?
     headers: HeaderMap,
     body: String,
 ) -> Result<impl IntoResponse> {
@@ -34,7 +33,12 @@ pub async fn webhook_handler(
 
     let tg_secret = state.settings.telegram_secret;
     let reqwest_client = state.reqwest_client;
-    let chat_id = state.settings.base.chat_id;
+    let chat_id = state
+        .settings
+        .base
+        .telegram
+        .chat_id
+        .ok_or(eyre!("Chat id can't be read"))?;
     post(events, reqwest_client, tg_secret, chat_id).await?;
     Ok(())
 }

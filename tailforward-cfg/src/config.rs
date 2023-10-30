@@ -7,21 +7,40 @@ use std::{net::SocketAddr, str::FromStr};
 #[serde(default)]
 pub struct Config {
     pub debug: bool,
-    pub tailscale_secret_file: Utf8PathBuf,
-    pub telegram_secret_file: Utf8PathBuf,
+    pub tailscale: Tailscale,
+    pub telegram: Telegram,
     pub address: SocketAddr,
-    pub chat_id: i64,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             debug: false,
-            tailscale_secret_file: "/secrets/tailscale-webhook".into(),
-            telegram_secret_file: "/secrets/telegram".into(),
+            tailscale: Tailscale::default(),
+            telegram: Telegram::default(),
             address: SocketAddr::from_str("0.0.0.0:33010")
                 .expect("Default value for config should never panic!"),
-            chat_id: -1_001_864_190_705,
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Tailscale {
+    pub secret_file: Option<Utf8PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Telegram {
+    pub secret_file: Option<Utf8PathBuf>,
+    pub file_format: Format,
+    pub chat_id: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub enum Format {
+    #[default]
+    Plain,
+    Alertmanager,
 }
