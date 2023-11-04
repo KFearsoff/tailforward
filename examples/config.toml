@@ -2,6 +2,9 @@ debug = false
 address = "0.0.0.0:33010"
 
 [tailscale]
+secret_file = "/etc/tailforward/tailforward.toml"
 
 [telegram]
+secret_file = "/secrets/telegram"
 file_format = "Plain"
+chat_id = -123
