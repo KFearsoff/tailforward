@@ -13,10 +13,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     dream2nix = {
-      url = "github:nix-community/dream2nix/legacy";
+      url = "github:nix-community/dream2nix";
       inputs = {
         nixpkgs.follows = "nixpkgs";
-        flake-parts.follows = "flake-parts";
       };
     };
   };
@@ -25,7 +24,6 @@
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
         inputs.devenv.flakeModule
-        inputs.dream2nix.flakeModuleBeta
       ];
 
       systems = [
@@ -33,19 +31,14 @@
         "aarch64-linux"
       ];
 
-      dream2nix = {
-        config.projectRoot = ./.;
-      };
-
       perSystem = {
-        config,
         pkgs,
-        inputs',
+        system,
         ...
       }: {
         devenv.shells.default = {
           languages.rust.enable = true;
-          languages.rust.version = "latest";
+          languages.rust.channel = "nixpkgs";
 
           # https://github.com/cachix/devenv/issues/528
           containers = pkgs.lib.mkForce {};
@@ -73,20 +66,19 @@
           };
         };
 
-        dream2nix.inputs."tailforward" = let
-          # we use the full toolchain derivation here as using
-          # only the cargo / rustc derivation *does not* work.
-          inherit (inputs'.fenix.packages.minimal) toolchain;
-        in {
-          source = ./.;
-          projects = builtins.fromTOML (builtins.readFile ./projects.toml);
-          packageOverrides = {
-            # for crane builder
-            "^.*".set-toolchain.overrideRustToolchain = _: {cargo = toolchain;};
-          };
+        packages.default = inputs.dream2nix.lib.evalModules {
+          packageSets.nixpkgs = inputs.dream2nix.inputs.nixpkgs.legacyPackages.${system};
+          modules = [
+            ./default.nix
+            {
+              paths = {
+                projectRoot = ./.;
+                projectRootFile = "flake.nix";
+                package = ./.;
+              };
+            }
+          ];
         };
-
-        inherit (config.dream2nix.outputs."tailforward") packages;
       };
     };
 }
