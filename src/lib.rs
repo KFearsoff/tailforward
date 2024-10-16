@@ -33,8 +33,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, post, Router};
 use color_eyre::eyre::Result;
 use handlers::{ping_handler, webhook_handler};
-use opentelemetry::KeyValue;
-use opentelemetry_sdk::{trace, Resource};
+use opentelemetry::trace::TracerProvider;
 use tokio::signal;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
@@ -92,20 +91,14 @@ pub struct State {
 #[allow(clippy::missing_errors_doc)]
 pub fn setup_tracing() -> Result<()> {
     // Create env filter
-    let env_filter = EnvFilter::try_from_default_env()
-        .map_or_else(|_| EnvFilter::new("info"), |env_filter| env_filter);
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // Install a new OpenTelemetry trace pipeline
-    let tracer = opentelemetry_otlp::new_pipeline()
+    let provider = opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(opentelemetry_otlp::new_exporter().tonic())
-        .with_trace_config(
-            trace::config().with_resource(Resource::new(vec![KeyValue::new(
-                "service.name",
-                "tailforward",
-            )])),
-        )
-        .install_batch(opentelemetry::runtime::Tokio)?;
+        .install_batch(opentelemetry_sdk::runtime::Tokio)?;
+    let tracer = provider.tracer("tailforward");
     let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
     Registry::default()

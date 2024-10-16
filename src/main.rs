@@ -1,6 +1,7 @@
 use color_eyre::eyre::Result;
 use tailforward::{config::new_config, setup_app, setup_tracing, shutdown_signal};
 use tap::Tap;
+use tokio::net::TcpListener;
 use tracing::debug;
 
 #[tokio::main]
@@ -12,8 +13,8 @@ async fn main() -> Result<()> {
 
     let addr = settings.base.address;
     let app = setup_app(settings)?;
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    let listener = TcpListener::bind(&addr).await?;
+    axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

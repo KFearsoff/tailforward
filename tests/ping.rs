@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::net::{SocketAddr, TcpListener};
+use std::future::IntoFuture;
 use tailforward::config::{new_config_with_secrets, Application};
+use tokio::net::TcpListener;
 
 static GLOBAL_CONFIG: Lazy<Application> = Lazy::new(|| {
     new_config_with_secrets("tail".to_owned().into(), "tele=gram".to_owned().into()).unwrap()
@@ -9,11 +10,9 @@ static GLOBAL_CONFIG: Lazy<Application> = Lazy::new(|| {
 #[tokio::test]
 async fn ping_works() {
     // Arrange
-    let addr = TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap();
-    spawn_app(GLOBAL_CONFIG.to_owned(), &addr);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    spawn_app(GLOBAL_CONFIG.to_owned(), listener);
     let client = reqwest::Client::new();
 
     // Act
@@ -28,8 +27,8 @@ async fn ping_works() {
     assert_eq!(Some(0), response.content_length());
 }
 
-fn spawn_app(config: Application, address: &SocketAddr) {
+fn spawn_app(config: Application, listener: TcpListener) {
     let app = tailforward::setup_app(config).unwrap();
-    let server = axum::Server::bind(address).serve(app.into_make_service());
+    let server = axum::serve(listener, app.into_make_service()).into_future();
     let _ = tokio::spawn(server);
 }
