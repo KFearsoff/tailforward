@@ -1,15 +1,10 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    systems.url = "github:nix-systems/default";
-    flake-parts.url = "github:hercules-ci/flake-parts";
+    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
 
     fenix = {
       url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    devenv = {
-      url = "github:cachix/devenv";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     dream2nix = {
@@ -20,36 +15,14 @@
     };
   };
 
-  outputs = inputs @ {flake-parts, ...}:
-    flake-parts.lib.mkFlake {inherit inputs;} {
-      imports = [
-        inputs.devenv.flakeModule
-      ];
-
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
-
-      perSystem = {
-        pkgs,
-        system,
-        ...
-      }: {
-        devenv.shells.default = {
-          languages.rust.enable = true;
-          languages.rust.channel = "nixpkgs";
-
-          # https://github.com/cachix/devenv/issues/528
-          containers = pkgs.lib.mkForce {};
-
-          packages = with pkgs; [
-            cargo-deny
-            cargo-edit
-            cargo-nextest
-          ];
-
-          pre-commit.hooks = {
+  outputs = inputs @ {...}:
+  let
+    pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+    in {
+      checks.x86_64-linux = {
+        pre-commit-check = inputs.pre-commit-hooks.lib.x86_64-linux.run {
+          src = ./.;
+          hooks = {
             # Nix
             alejandra.enable = true;
             deadnix.enable = true;
@@ -65,20 +38,35 @@
             rustfmt.enable = true;
           };
         };
+      };
 
-        packages.default = inputs.dream2nix.lib.evalModules {
-          packageSets.nixpkgs = inputs.dream2nix.inputs.nixpkgs.legacyPackages.${system};
-          modules = [
-            ./default.nix
-            {
-              paths = {
-                projectRoot = ./.;
-                projectRootFile = "flake.nix";
-                package = ./.;
-              };
-            }
-          ];
-        };
+      devShells.x86_64-linux.default = pkgs.mkShellNoCC {
+        packages = with pkgs; [
+          rustc
+          cargo
+          clippy
+          rustfmt
+          rust-analyzer
+          cargo-deny
+          cargo-edit
+          cargo-nextest
+        ];
+
+        inherit (inputs.self.checks.x86_64-linux.pre-commit-check) shellHook;
+      };
+
+      packages.x86_64-linux.default = inputs.dream2nix.lib.evalModules {
+        packageSets.nixpkgs = inputs.dream2nix.inputs.nixpkgs.legacyPackages.x86_64-linux;
+        modules = [
+          ./default.nix
+          {
+            paths = {
+              projectRoot = ./.;
+              projectRootFile = "flake.nix";
+              package = ./.;
+            };
+          }
+        ];
       };
     };
 }
