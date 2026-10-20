@@ -5,26 +5,18 @@
       url = "github:cachix/pre-commit-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    dream2nix = {
-      url = "github:nix-community/dream2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
     inputs@{
       nixpkgs,
       pre-commit-hooks,
-      dream2nix,
       ...
     }:
     let
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      inherit (nixpkgs) lib;
+      package = import ./package.nix { inherit pkgs lib; };
     in
     {
       checks.x86_64-linux = {
@@ -62,18 +54,9 @@
         inherit (inputs.self.checks.x86_64-linux.pre-commit-check) shellHook;
       };
 
-      packages.x86_64-linux.default = dream2nix.lib.evalModules {
-        packageSets.nixpkgs = dream2nix.inputs.nixpkgs.legacyPackages.x86_64-linux;
-        modules = [
-          ./default.nix
-          {
-            paths = {
-              projectRoot = ./.;
-              projectRootFile = "flake.nix";
-              package = ./.;
-            };
-          }
-        ];
+      packages.x86_64-linux = {
+        default = package;
+        tailforward = package;
       };
     };
 }
