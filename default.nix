@@ -18,7 +18,7 @@
     };
 
   name = "tailforward";
-  version = "0.7.1";
+  version = "0.7.2";
 
   # Ecosystem-dependent package definition goes here
 }
